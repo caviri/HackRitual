@@ -1,0 +1,90 @@
+/* ============================================================ *
+ * THEME — hacker-solarpunk                                       *
+ *                                                                *
+ * A terminal that grew lichens. Phosphor green warmed by         *
+ * mycelium ochre and biolume teal. Forest floor at midnight.     *
+ * ============================================================ */
+
+[data-theme='hacker-solarpunk'],
+:root {
+  /* Soil — surface stack (warm forest-floor blacks, not pure) */
+  --soil-950: #050603;
+  --soil-900: #0a0c07;
+  --soil-800: #11140d;
+  --soil-700: #1a1e14;
+  --soil-600: #23291c;
+  --soil-500: #2e3525;
+
+  /* Moss — primary, the colour of action */
+  --moss-50: #eff3e7;
+  --moss-100: #d8e3c6;
+  --moss-200: #b8c99e;
+  --moss-300: #9bb37a;
+  --moss-400: #7c9858;
+  --moss-500: #6b8a4b;
+  --moss-600: #557237;
+  --moss-700: #4a6234;
+  --moss-800: #324523;
+  --moss-900: #1a2410;
+
+  /* Bioluminescence — used SPARINGLY for emphasis */
+  --bio-300: #9eebde;
+  --bio-400: #5cd9c5;
+  --bio-500: #2dc3b2;
+  --bio-600: #1d9988;
+
+  /* Mycelium — warm ochre underground */
+  --mycelium-300: #e6c193;
+  --mycelium-500: #b8842f;
+  --mycelium-700: #875e1e;
+
+  /* Ash — neutral text + dimmed UI */
+  --ash-100: #f1f1e8;
+  --ash-300: #babcae;
+  --ash-500: #8a8f78;
+  --ash-700: #545848;
+  --ash-900: #2a2c22;
+
+  /* ───── semantic tokens (these are what UI consumes) ───── */
+  --bg: var(--soil-950);
+  --bg-elev: var(--soil-800);
+  --bg-rule: var(--soil-700);
+  --fg: var(--ash-100);
+  --fg-muted: var(--ash-500);
+  --fg-dim: var(--ash-700);
+
+  --primary: var(--moss-400);
+  --primary-fg: var(--soil-950);
+  --primary-glow: rgba(124, 152, 88, 0.45);
+
+  --accent: var(--bio-400);
+  --accent-glow: rgba(92, 217, 197, 0.45);
+
+  --warm: var(--mycelium-500);
+
+  --rule: var(--moss-900);
+  --rule-bright: var(--moss-700);
+
+  --danger: #c7493a;
+  --success: var(--moss-400);
+  --warning: var(--mycelium-500);
+  --info: var(--bio-500);
+
+  /* Atmosphere */
+  --grain-opacity: 0.08;
+  --scanline-opacity: 0.04;
+  --vignette: radial-gradient(
+    ellipse at center,
+    transparent 40%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+
+  /* Typography */
+  --font-mono: var(--font-mono-loaded), 'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: var(--font-display-loaded), 'EB Garamond', Georgia, serif;
+  --font-body: var(--font-mono);
+
+  /* Geometry — almost-flat, terminal-feel */
+  --radius: 2px;
+  --radius-lg: 4px;
+}

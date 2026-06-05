@@ -1,0 +1,542 @@
+/**
+ * Thin wrapper around the FastAPI backend served by the same container.
+ *
+ * Two patterns:
+ *
+ *   • `fetchJson<T>(path, fallback)` — returns `fallback` if the request
+ *     fails (network down, 4xx/5xx, JSON parse error). Used during the
+ *     proposal phase when the backend may not be deployed alongside the
+ *     static export.
+ *
+ *   • `requireJson<T>(path)` — throws on any failure. Use for forms.
+ *
+ * Endpoints map 1:1 to the FastAPI routers under /api/*.
+ */
+
+export type EventState = 'DRAFT' | 'OPEN' | 'FROZEN' | 'FINAL' | 'ARCHIVED';
+export type ImageEffect = 'none' | 'dither' | 'halftone';
+export type ProjectStatus = 'proposed' | 'approved' | 'rejected';
+export type SubmissionStatus = 'draft' | 'final' | 'withdrawn';
+
+export interface EventDTO {
+  id: string;
+  title: string;
+  type: string;
+  state: EventState;
+  start_at: string;
+  end_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TrackDTO {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface PhaseDTO {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface PageDTO {
+  id: string;
+  event_id: string;
+  title: string;
+  content: string;
+  visible: boolean;
+  order: number;
+  phase_id: string | null;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface ProjectDTO {
+  id: string;
+  event_id: string;
+  track_id: string | null;
+  proposed_by_participant_id: string;
+  title: string;
+  description: string;
+  image: string | null;
+  status: ProjectStatus;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface SubmissionDTO {
+  id: string;
+  event_id: string;
+  project_id: string;
+  participant_id: string;
+  version: number;
+  title: string | null;
+  description: string | null;
+  result: string | null;
+  payload_json: string | null;
+  status: SubmissionStatus;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface ParticipantDTO {
+  id: string;
+  event_id: string;
+  type: 'human' | 'agent' | 'team';
+  display_name: string;
+  affiliation: string | null;
+  links?: string[] | null;
+  status: string;
+  is_waiting?: boolean;
+  created_at?: string;
+}
+
+export interface ScoreDTO {
+  id: string;
+  submission_id: string;
+  score_value: number;
+  breakdown: Record<string, number>;
+  notes: string | null;
+  status: string;
+  scorer_version: string | null;
+  scored_at: string | null;
+}
+
+export interface LogEntryDTO {
+  id: string;
+  ts: string;
+  actor: string | null;
+  actor_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  summary: string | null;
+}
+
+export interface LogPageDTO {
+  entries: LogEntryDTO[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CommitDTO {
+  sha: string;
+  sha_short: string;
+  branch: string | null;
+  message: string;
+  message_first_line: string;
+  author_name: string;
+  author_login: string | null;
+  author_avatar_url: string | null;
+  author_profile_url: string | null;
+  committed_at: string;
+}
+
+export interface RepoDTO {
+  id: string;
+  project_id: string;
+  url: string;
+  host: string;
+  owner: string;
+  repo: string;
+  label: string | null;
+  default_branch: string | null;
+  description: string | null;
+  stars: number | null;
+  last_pushed_at: string | null;
+  last_polled_at: string | null;
+  polling_error: string | null;
+  commits: CommitDTO[];
+}
+
+export interface AgentDTO {
+  id: string;
+  name: string;
+  owner_user_id: string | null;
+  owner_email: string | null;
+  status: string;
+  created_at: string;
+  key_preview: string;
+}
+
+export interface AgentCreatedDTO {
+  agent: AgentDTO;
+  api_key: string;
+}
+
+export interface PortraitInfo {
+  url: string | null;
+  effect: ImageEffect | null;
+  contrast: number | null;
+  brightness: number | null;
+  scale: number | null;
+}
+
+export interface MeParticipantDTO {
+  id: string;
+  display_name: string;
+  type: 'human' | 'agent' | 'team';
+  status: string;
+  is_waiting: boolean;
+  affiliation: string | null;
+}
+
+export interface MeDTO {
+  id: string;
+  email: string;
+  role: string;
+  display_name: string | null;
+  participant?: MeParticipantDTO | null;
+  portrait?: PortraitInfo | null;
+}
+
+export interface HealthDTO {
+  status: string;
+  version: string;
+  event_id: string;
+  event_state: EventState;
+  persistent_storage: boolean;
+  db_ok: boolean;
+}
+
+export interface UploadDTO {
+  id: string;
+  submission_id: string;
+  path: string;
+  url: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  effect: ImageEffect;
+  created_at: string;
+}
+
+const BASE = '';
+
+export async function fetchJson<T>(path: string, fallback: T): Promise<T> {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { accept: 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) return fallback;
+    return (await res.json()) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function requireJson<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { accept: 'application/json', ...(init.headers ?? {}) },
+    credentials: 'include',
+    ...init,
+  });
+  if (!res.ok) {
+    throw new ApiError(res.status, await res.text().catch(() => ''));
+  }
+  return (await res.json()) as T;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, public body: string) {
+    super(`api ${status}: ${body || '(no body)'}`);
+  }
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * Typed endpoints                                                 *
+ * ───────────────────────────────────────────────────────────── */
+
+export const api = {
+  health: () =>
+    fetchJson<HealthDTO>('/api/health', {
+      status: 'ok',
+      version: '0.1.0',
+      event_id: 'demo',
+      event_state: 'OPEN',
+      persistent_storage: false,
+      db_ok: true,
+    }),
+
+  event: () => fetchJson<EventDTO | null>('/api/event', null),
+
+  tracks: () => fetchJson<TrackDTO[]>('/api/tracks', []),
+  phases: () => fetchJson<PhaseDTO[]>('/api/phases', []),
+  pages: () => fetchJson<PageDTO[]>('/api/pages', []),
+
+  projects: (track?: string) =>
+    fetchJson<ProjectDTO[]>(
+      '/api/projects' + (track ? `?track_id=${encodeURIComponent(track)}` : ''),
+      [],
+    ),
+  project: (id: string) => fetchJson<ProjectDTO | null>(`/api/projects/${id}`, null),
+
+  submissions: (projectId?: string) =>
+    fetchJson<SubmissionDTO[]>(
+      '/api/submissions' + (projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''),
+      [],
+    ),
+
+  participants: async (): Promise<ParticipantDTO[]> => {
+    // /api/participants is paginated: { participants, total, page, per_page, pages }
+    const wrapped = await fetchJson<{ participants?: ParticipantDTO[] }>(
+      '/api/participants?per_page=100',
+      { participants: [] },
+    );
+    return Array.isArray(wrapped.participants) ? wrapped.participants : [];
+  },
+
+  // ── auth (form callers throw on failure)
+  requestCode: (email: string) =>
+    requireJson<void>('/api/auth/request-code', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyCode: (email: string, code: string) =>
+    requireJson<{ user: { id: string; email: string; role: string } }>(
+      '/api/auth/verify-code',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      },
+    ),
+
+  me: () =>
+    fetchJson<MeDTO | null>('/api/auth/me', null),
+
+  uploadPortrait: async (
+    file: File,
+    effect: ImageEffect,
+    contrast: number,
+    brightness: number,
+    scale: number,
+  ) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('effect', effect);
+    form.append('contrast', String(contrast));
+    form.append('brightness', String(brightness));
+    form.append('scale', String(scale));
+    return requireJson<MeDTO>('/api/me/portrait', { method: 'POST', body: form });
+  },
+
+  retunePortrait: async (
+    effect: ImageEffect,
+    contrast: number,
+    brightness: number,
+    scale: number,
+  ) => {
+    const form = new FormData();
+    form.append('effect', effect);
+    form.append('contrast', String(contrast));
+    form.append('brightness', String(brightness));
+    form.append('scale', String(scale));
+    return requireJson<MeDTO>('/api/me/portrait', { method: 'PATCH', body: form });
+  },
+
+  deletePortrait: () =>
+    requireJson<MeDTO>('/api/me/portrait', { method: 'DELETE' }),
+
+  // ── agents ──
+  agents: () => fetchJson<AgentDTO[]>('/api/agents', []),
+
+  createAgent: (name: string) =>
+    requireJson<AgentCreatedDTO>('/api/agents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }),
+
+  rotateAgent: (id: string) =>
+    requireJson<AgentCreatedDTO>(`/api/agents/${id}/rotate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    }),
+
+  revokeAgent: (id: string) =>
+    requireJson<AgentDTO>(`/api/agents/${id}/revoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+    }),
+
+  deleteAgent: async (id: string) => {
+    const res = await fetch(`/api/agents/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok)
+      throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
+  // ── admin
+  seedDemoData: () =>
+    requireJson<Record<string, number>>('/api/admin/seed', { method: 'POST' }),
+
+  // ── repositories
+  projectRepos: (projectId: string) =>
+    fetchJson<RepoDTO[]>(`/api/projects/${projectId}/repos`, []),
+
+  attachRepo: (projectId: string, url: string, label?: string) =>
+    requireJson<RepoDTO>(`/api/projects/${projectId}/repos`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url, label }),
+    }),
+
+  refreshRepo: (projectId: string, repoId: string) =>
+    requireJson<RepoDTO>(`/api/projects/${projectId}/repos/${repoId}/refresh`, {
+      method: 'POST',
+    }),
+
+  detachRepo: async (projectId: string, repoId: string) => {
+    const res = await fetch(`/api/projects/${projectId}/repos/${repoId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok)
+      throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
+  participantFeed: (participantId: string) =>
+    fetchJson<CommitDTO[]>(`/api/feed/participant/${participantId}`, []),
+
+  // ── audit log
+  logPage: (params: {
+    limit?: number;
+    offset?: number;
+    action_prefix?: string;
+    actor?: string;
+    target_type?: string;
+  } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.offset) qs.set('offset', String(params.offset));
+    if (params.action_prefix) qs.set('action_prefix', params.action_prefix);
+    if (params.actor) qs.set('actor', params.actor);
+    if (params.target_type) qs.set('target_type', params.target_type);
+    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchJson<LogPageDTO>(`/api/log${suffix}`, {
+      entries: [],
+      total: 0,
+      limit: params.limit ?? 50,
+      offset: params.offset ?? 0,
+    });
+  },
+
+  // ── single submission
+  submission: (id: string) =>
+    fetchJson<SubmissionDTO | null>(`/api/submissions/${id}`, null),
+
+  updateSubmission: (
+    id: string,
+    patch: {
+      title?: string;
+      description?: string;
+      result?: string;
+      payload_json?: string;
+      status?: SubmissionStatus;
+    },
+  ) =>
+    requireJson<SubmissionDTO>(`/api/submissions/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    }),
+
+  createSubmission: (body: {
+    project_id: string;
+    participant_id: string;
+    title?: string;
+    description?: string;
+    result?: string;
+    payload_json?: string;
+  }) =>
+    requireJson<SubmissionDTO>('/api/submissions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  // ── scoring
+  listScores: (submissionId: string) =>
+    fetchJson<ScoreDTO[]>(`/api/submissions/${submissionId}/scores`, []),
+
+  createScore: (
+    submissionId: string,
+    body: { score_value?: number; breakdown?: Record<string, number>; notes?: string },
+  ) =>
+    requireJson<ScoreDTO>(`/api/submissions/${submissionId}/scores`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  deleteScore: async (scoreId: string) => {
+    const res = await fetch(`/api/scores/${scoreId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok)
+      throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
+  logout: async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      /* swallow — we'll reload anyway */
+    }
+  },
+
+  // ── mutations used by forms
+  createProject: (body: {
+    title: string;
+    description: string;
+    track_id?: string;
+    image?: string;
+    proposed_by_participant_id: string;
+  }) =>
+    requireJson<ProjectDTO>('/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  uploadImage: async (
+    file: File,
+    submissionId: string,
+    participantId: string,
+    effect: ImageEffect,
+  ) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('submission_id', submissionId);
+    form.append('participant_id', participantId);
+    form.append('effect', effect);
+    return requireJson<UploadDTO>('/api/uploads', {
+      method: 'POST',
+      body: form,
+    });
+  },
+};

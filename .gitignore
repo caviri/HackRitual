@@ -1,0 +1,45 @@
+# Environment and secrets
+.env
+backend/.env
+.env.bak
+*.env.bak
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Testing / linting caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Logs and runtime artifacts
+*.log
+nohup.out
+
+# Data (SQLite DB, uploads)
+data/
+
+# Node / frontend build
+node_modules/
+.next/
+out/
+.pnpm-store/
+
+# IDE
+.vscode/
+.idea/
+
+# DevContainer caches (persisted volumes)
+.devcontainer/persist/
+
+# Claude Code
+.claude/

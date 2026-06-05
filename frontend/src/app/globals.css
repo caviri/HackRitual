@@ -1,0 +1,314 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import '../styles/themes/hacker-solarpunk.css';
+@import '../styles/themes/paper-grimoire.css';
+
+/* ───────────────────────────────────────────────────────────── *
+ * BASE                                                            *
+ * ───────────────────────────────────────────────────────────── */
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-feature-settings: 'liga' 0, 'calt' 0, 'ss01';
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--primary-fg);
+}
+
+* {
+  border-color: var(--rule);
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * ATMOSPHERE — grain + scanlines + vignette, fixed to viewport.   *
+ * Pure CSS, no JS, no images.                                     *
+ * ───────────────────────────────────────────────────────────── */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Grain — SVG noise as a data URI */
+body::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/></svg>");
+  opacity: var(--grain-opacity);
+  mix-blend-mode: overlay;
+}
+
+/* Scanlines + vignette */
+body::after {
+  background:
+    var(--vignette),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2px,
+      rgba(255, 255, 255, var(--scanline-opacity)) 3px,
+      transparent 4px
+    );
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * TYPOGRAPHY                                                      *
+ * ───────────────────────────────────────────────────────────── */
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: 'liga', 'dlig', 'kern', 'onum';
+}
+
+.ritual {
+  font-family: var(--font-display);
+  font-style: italic;
+  letter-spacing: -0.01em;
+}
+
+.prompt::before {
+  content: '$ ';
+  color: var(--primary);
+  opacity: 0.7;
+}
+
+.bracket-id::before {
+  content: '#';
+  color: var(--fg-dim);
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * ASCII FRAME — terminal-style box used on cards                  *
+ *                                                                  *
+ * Wrapped in @layer components so Tailwind utility classes (e.g.   *
+ * `absolute`, `fixed`) can override its default `position: relative`. *
+ * Without @layer, this rule comes after `@tailwind utilities` and  *
+ * silently wins source-order precedence, breaking dropdowns that   *
+ * use ascii-frame on an absolutely-positioned element.             *
+ * ───────────────────────────────────────────────────────────── */
+@layer components {
+  .ascii-frame {
+    position: relative;
+    border: 1px solid var(--rule);
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--bg-elev) 80%, transparent),
+      color-mix(in oklab, var(--bg-elev) 50%, transparent)
+    );
+  }
+}
+
+.ascii-frame::before,
+.ascii-frame::after {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--rule-bright);
+  pointer-events: none;
+}
+
+.ascii-frame::before {
+  content: '◆';
+  top: -0.45em;
+  left: 0.75em;
+  background: var(--bg);
+  padding: 0 0.4em;
+  color: var(--primary);
+}
+
+.ascii-frame::after {
+  content: '╼';
+  right: -0.1em;
+  bottom: -0.4em;
+  background: var(--bg);
+  padding: 0 0.2em;
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * BUTTONS                                                         *
+ * ───────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55em;
+  padding: 0.7em 1.1em;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+  text-decoration: none;
+  border: 1px solid var(--primary);
+  background: transparent;
+  color: var(--primary);
+  border-radius: var(--radius);
+  transition:
+    background 200ms,
+    color 200ms,
+    box-shadow 200ms,
+    transform 80ms;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--primary);
+  color: var(--primary-fg);
+  box-shadow: 0 0 0 4px var(--primary-glow), 0 0 24px var(--primary-glow);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-ghost {
+  border-color: var(--rule-bright);
+  color: var(--fg-muted);
+}
+.btn-ghost:hover {
+  background: var(--bg-elev);
+  color: var(--fg);
+  box-shadow: none;
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * DIVIDER — botanical                                             *
+ * ───────────────────────────────────────────────────────────── */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  color: var(--rule-bright);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--rule-bright),
+    transparent
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * SUBTLE GRID overlay for the hero                                *
+ * ───────────────────────────────────────────────────────────── */
+.grid-bg {
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: -1px -1px;
+  -webkit-mask-image: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.85),
+    transparent 70%
+  );
+  mask-image: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.85),
+    transparent 70%
+  );
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * HALFTONE — the dot mask layer for `<DitheredImage effect="halftone">` *
+ * Lives ABOVE the posterized image (the SVG filter handles the          *
+ * contrast/posterize; this layer paints the dots).                      *
+ * ───────────────────────────────────────────────────────────── */
+.halftone-mask {
+  background-image:
+    radial-gradient(var(--bg) 1.2px, transparent 1.6px);
+  background-size: 5px 5px;
+  background-position: 0 0;
+  mix-blend-mode: lighten;
+  pointer-events: none;
+  opacity: 0.95;
+}
+[data-theme='paper-grimoire'] .halftone-mask {
+  /* on light theme, dots remove ink instead of adding light */
+  background-image:
+    radial-gradient(var(--bg) 1.2px, transparent 1.6px);
+  mix-blend-mode: screen;
+}
+
+/* ───────────────────────────────────────────────────────────── *
+ * WARNING BAND — Jurassic-Park hazard stripes for the admin zone   *
+ * Ochre + soil diagonal stripes that scroll slowly. A centered     *
+ * banner cuts through them with the message text.                  *
+ * ───────────────────────────────────────────────────────────── */
+.warning-band {
+  position: relative;
+  height: 22px;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--warm) 0 14px,
+    color-mix(in oklab, var(--soil-900) 90%, var(--warm) 10%) 14px 28px
+  );
+  background-size: 40px 40px;
+  animation: warning-scroll 12s linear infinite;
+  border-block: 1px solid var(--rule-bright);
+  overflow: hidden;
+}
+.warning-band__text {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--bg);
+  color: var(--warm);
+  padding: 2px 14px;
+  border: 1px solid var(--rule-bright);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+@keyframes warning-scroll {
+  to {
+    background-position: -80px 0;
+  }
+}
+
+/* The admin zone gets a subtle ochre tint on its surface so the eye
+   knows it's somewhere different even between bands. */
+.admin-zone {
+  position: relative;
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--warm) 4%, transparent), transparent 240px);
+}
+
+/* Glow underline used on the wordmark */
+.glow-rule {
+  position: relative;
+}
+.glow-rule::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+  opacity: 0.6;
+}

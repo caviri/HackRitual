@@ -1,0 +1,31 @@
+{
+  "name": "hackritual-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:screenshots": "playwright test"
+  },
+  "dependencies": {
+    "next": "14.2.18",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.47.2",
+    "@types/node": "20.11.30",
+    "@types/react": "18.2.79",
+    "@types/react-dom": "18.2.25",
+    "autoprefixer": "10.4.19",
+    "postcss": "8.4.38",
+    "tailwindcss": "3.4.3",
+    "typescript": "5.4.5"
+  }
+}

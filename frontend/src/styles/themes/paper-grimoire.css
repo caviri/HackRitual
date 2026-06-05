@@ -1,0 +1,46 @@
+/* ============================================================ *
+ * THEME — paper-grimoire                                         *
+ *                                                                *
+ * Iron-gall ink on cream rag paper. A handbound journal of       *
+ * rituals. The exact opposite mood of hacker-solarpunk but the   *
+ * same DNA — ritual, handcraft, intentionality.                  *
+ * ============================================================ */
+
+[data-theme='paper-grimoire'] {
+  --bg: #f4ecd7;
+  --bg-elev: #ece2c5;
+  --bg-rule: #cabf9c;
+
+  --fg: #1c1814;
+  --fg-muted: #5a4f3c;
+  --fg-dim: #8a7e64;
+
+  --primary: #6a2a1a; /* iron-gall red */
+  --primary-fg: #f4ecd7;
+  --primary-glow: rgba(106, 42, 26, 0.18);
+
+  --accent: #2a4a30; /* deep forest ink */
+  --accent-glow: rgba(42, 74, 48, 0.18);
+
+  --warm: #8e6a1d;
+
+  --rule: #d5c9a4;
+  --rule-bright: #a89978;
+
+  --danger: #8e2218;
+  --success: #2a4a30;
+  --warning: #8e6a1d;
+  --info: #355c7d;
+
+  /* Atmosphere — heavier paper grain, no scanlines */
+  --grain-opacity: 0.16;
+  --scanline-opacity: 0;
+  --vignette: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(28, 24, 20, 0.12) 100%
+  );
+
+  /* Typography — display becomes primary, mono is for data only */
+  --font-body: var(--font-display);
+}
