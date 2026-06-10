@@ -4,22 +4,34 @@ Populates a fresh database with a realistic event so admin tables and the
 landing page have content to display. Idempotent — running twice does not
 create duplicates: tracks/phases/pages key on (event_id, name|title),
 participants key on (event_id, display_name), projects key on (event_id, title),
-submissions key on (project, participant, version).
+submissions key on (project, participant, version), users on email, member
+links on (participant, user), files on (submission, sha256), applications on
+email. Generated art is deterministic, so file hashes are stable across runs;
+disk artifacts regenerate when the DB points at a missing file.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+import json
+import re
+from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.application import Application
+from app.models.file import File
 from app.models.page import Page
 from app.models.participant import Participant
+from app.models.participant_member import ParticipantMember
 from app.models.phase import Phase
 from app.models.project import Project
 from app.models.submission import Submission
 from app.models.track import Track
+from app.models.user import User
+from app.services import demo_art
 
 
 def _track_data() -> list[dict]:
@@ -64,6 +76,127 @@ def _phase_data(event_start: datetime, event_end: datetime) -> list[dict]:
     ]
 
 
+def _user_data() -> list[dict]:
+    """Demo users behind the human participants. Fixed passwords keep demos
+    reproducible; collisions fall back to a generated one."""
+    return [
+        {"email": "ada@demo.rite", "name": "Ada Cole", "role": "user", "password": "fern-lantern-4821", "login_hours": 2},
+        {"email": "june@demo.rite", "name": "June K.", "role": "user", "password": "moss-quill-7305", "login_hours": 5},
+        {"email": "photosym@demo.rite", "name": "Photosym", "role": "user", "password": "cedar-prism-1184", "login_hours": 8},
+        {"email": "jane@demo.rite", "name": "Jane Tu", "role": "user", "password": "briar-comet-6592", "login_hours": 11},
+        {"email": "aram@demo.rite", "name": "Aram J.", "role": "judge", "password": "rowan-sigil-2417", "login_hours": 26},
+        {"email": "mila@demo.rite", "name": "Mila A.", "role": "judge", "password": "heron-ember-9038", "login_hours": 27},
+    ]
+
+
+def _membership_data() -> list[dict]:
+    """(team display_name, user email, role_in_team) — beyond each user
+    captaining their own solo participant."""
+    return [
+        {"participant": "the_owls", "email": "june@demo.rite", "role": "captain"},
+        {"participant": "the_owls", "email": "ada@demo.rite", "role": "member"},
+        {"participant": "photosym-duo", "email": "photosym@demo.rite", "role": "captain"},
+        {"participant": "meadow", "email": "jane@demo.rite", "role": "captain"},
+    ]
+
+
+# Submission enrichment: (project, version) → description, payload, and which
+# generated plates / reports to attach. File counts are chosen so the default
+# completeness scorer lands distinct values (no leaderboard ties):
+# mycelium-mesh v3 = 90, rhizome-rpc v1 = 80, photosym-os v2 = 60,
+# lichen-loom v2 = 50.
+_SUBMISSION_ENRICHMENT: dict[tuple[str, int], dict] = {
+    ("mycelium-mesh", 3): {
+        "description": "the mesh holds at 200 nodes. gossip converges in four hops; "
+        "nutrient routing tables stay under a kilobyte each.",
+        "payload": {"repo": "github.com/the-owls/mycelium-mesh", "demo": "demo.mp4", "nodes": 200},
+        "plates": [("plate:mycelium-mesh:1", "bloom")],
+        "report": "mycelium-mesh",
+    },
+    ("rhizome-rpc", 1): {
+        "description": "no central node, no preferred path. benchmarks against grpc "
+        "included — slower, but it survives losing half the graph.",
+        "payload": {"repo": "github.com/the-owls/rhizome-rpc", "benchmarks": "bench/results.json"},
+        "plates": [],
+        "report": "rhizome-rpc",
+    },
+    ("photosym-os", 2): {
+        "description": "the scheduler tracks sunlight across three grid regions; "
+        "workloads migrate at dawn and settle by noon.",
+        "payload": None,
+        "plates": [
+            ("plate:photosym-os:1", "nucleus"),
+            ("plate:photosym-os:2", "nucleus"),
+            ("plate:photosym-os:3", "lattice"),
+        ],
+        "report": None,
+    },
+    ("lichen-loom", 2): {
+        "description": "cron jobs that reschedule themselves around the weather feed. "
+        "the loom held through a simulated storm week.",
+        "payload": None,
+        "plates": [("plate:lichen-loom:1", "sprout"), ("plate:lichen-loom:2", "sprout")],
+        "report": None,
+    },
+    # Drafts get a single working plate and stay unscored.
+    ("mycelium-mesh", 2): {
+        "description": "",
+        "payload": None,
+        "plates": [("plate:mycelium-mesh:wip", "lattice")],
+        "report": None,
+    },
+    ("the_meadow_ide", 3): {
+        "description": "",
+        "payload": None,
+        "plates": [("plate:the_meadow_ide:wip", "sprout")],
+        "report": None,
+    },
+    ("spore-print", 1): {
+        "description": "",
+        "payload": None,
+        "plates": [("plate:spore-print:wip", "lattice")],
+        "report": None,
+    },
+}
+
+# Finals to score, in leaderboard order (values fall out of completeness).
+_SCORED_FINALS = [("mycelium-mesh", 3), ("rhizome-rpc", 1), ("photosym-os", 2), ("lichen-loom", 2)]
+
+_TRACK_MOTIF = {
+    "data-science": "bloom",
+    "research-infra": "nucleus",
+    "small-tools": "sprout",
+}
+
+
+def _report_md(project_title: str) -> str:
+    return (
+        f"# {project_title} — closing report\n\n"
+        "What was offered, what held, and what remains.\n\n"
+        "## What holds\n"
+        "The core path works end to end and survived the demo.\n\n"
+        "## What remains\n"
+        "Edges. There are always edges.\n"
+    )
+
+
+def _application_data() -> list[dict]:
+    return [
+        {"name": "Nadia Fern", "email": "nadia@petition.rite", "team": None,
+         "interest": "a moss-growth simulator for datacentre cooling maps.", "status": "pending"},
+        {"name": "Tomas Reyes", "email": "tomas@petition.rite", "team": "root-cellar",
+         "interest": "fermentation telemetry — jars that report their own readiness.", "status": "pending"},
+        {"name": "Priya Anand", "email": "priya@petition.rite", "team": "root-cellar",
+         "interest": "dashboards for yeast cultures. the colonies deserve observability.", "status": "pending"},
+        {"name": "Otto Lind", "email": "otto@petition.rite", "team": None,
+         "interest": "a slow-clock for experiments that take longer than attention spans.", "status": "pending"},
+        {"name": "Sana Idris", "email": "sana@petition.rite", "team": "night-soil",
+         "interest": "a compost chemistry logger with a thermal probe and opinions.", "status": "pending"},
+        {"name": "Vik Marsh", "email": "vik@petition.rite", "team": None,
+         "interest": "a crypto ticker skin for the leaderboard.", "status": "rejected"},
+    ]
+
+
 def _page_data() -> list[dict]:
     return [
         {
@@ -94,6 +227,27 @@ def _page_data() -> list[dict]:
                 "A. It may, with your consent and an API key.\n\n"
                 "Q. What if the container dies?\n"
                 "A. SQLite is in WAL mode. If your storage is persistent, you lose nothing."
+            ),
+        },
+        {
+            "title": "The Judges",
+            "order": 4,
+            "content": (
+                "Two judges hold the scales this rite: Aram J. (Stanford) and "
+                "Mila A. (ETH). The scorer renders a first verdict; the judges "
+                "may override it, and every override is inscribed in the audit log.\n\n"
+                "Scores weigh completeness: a title, a description, attached "
+                "evidence, and a structured payload."
+            ),
+        },
+        {
+            "title": "The Archive",
+            "order": 5,
+            "content": (
+                "When the rite reaches ARCHIVED, the record seals. The artefact "
+                "bundle holds the database, every upload, the audit trail, and a "
+                "manifest of sha256 sums.\n\n"
+                "Take the zip. Dispel the container. Nothing else remains."
             ),
         },
     ]
@@ -243,6 +397,13 @@ def seed_fixtures(db: Session) -> dict[str, int]:
         "participants_created": 0,
         "projects_created": 0,
         "submissions_created": 0,
+        "users_created": 0,
+        "members_created": 0,
+        "portraits_created": 0,
+        "project_images_created": 0,
+        "files_created": 0,
+        "scores_created": 0,
+        "applications_created": 0,
     }
     event_id = settings.event_id
 
@@ -372,7 +533,9 @@ def seed_fixtures(db: Session) -> dict[str, int]:
 
     db.flush()
 
-    # ── Submissions ──
+    # ── Submissions ── (keep references even for pre-existing rows so the
+    # enrichment passes below can fill them in)
+    submission_by_key: dict[tuple[str, int], Submission] = {}
     for s in _submission_data():
         project = project_by_title.get(s["project"])
         team_participant = participant_by_name.get(s["team"])
@@ -388,20 +551,224 @@ def seed_fixtures(db: Session) -> dict[str, int]:
             .first()
         )
         if existing:
+            submission_by_key[(s["project"], s["version"])] = existing
+            continue
+        row = Submission(
+            event_id=event_id,
+            project_id=project.id,
+            participant_id=team_participant.id,
+            version=s["version"],
+            title=s["project"],
+            description="",
+            result=s["result"],
+            status=s["status"],
+        )
+        db.add(row)
+        db.flush()
+        submission_by_key[(s["project"], s["version"])] = row
+        counts["submissions_created"] += 1
+
+    db.flush()
+
+    upload_root = Path(settings.upload_dir)
+    base_login = event.start_at if event else settings.event_start
+
+    # ── Users behind the human participants ──
+    user_by_email: dict[str, User] = {}
+    for u in _user_data():
+        existing_user = db.query(User).filter(User.email == u["email"]).first()
+        if existing_user is None:
+            password = u["password"]
+            if db.query(User).filter(User.access_password == password).first():
+                from app.services.passwords import generate_unique_password
+
+                password = generate_unique_password(db)
+            existing_user = User(
+                email=u["email"],
+                display_name=u["name"],
+                role=u["role"],
+                access_password=password,
+                last_login_at=base_login + timedelta(hours=u["login_hours"]),
+            )
+            db.add(existing_user)
+            db.flush()
+            counts["users_created"] += 1
+        elif not existing_user.access_password:
+            from app.services.passwords import generate_unique_password
+
+            existing_user.access_password = generate_unique_password(db)
+        user_by_email[u["email"]] = existing_user
+
+    # ── Membership links ── (each user captains their own solo participant,
+    # plus the team rosters)
+    links: list[tuple[Participant | None, User | None, str]] = []
+    for u in _user_data():
+        links.append((participant_by_name.get(u["name"]), user_by_email.get(u["email"]), "captain"))
+    for m in _membership_data():
+        links.append((participant_by_name.get(m["participant"]), user_by_email.get(m["email"]), m["role"]))
+    for participant, user, role in links:
+        if participant is None or user is None:
+            continue
+        existing_link = (
+            db.query(ParticipantMember)
+            .filter(
+                ParticipantMember.participant_id == participant.id,
+                ParticipantMember.user_id == user.id,
+            )
+            .first()
+        )
+        if existing_link:
             continue
         db.add(
-            Submission(
-                event_id=event_id,
-                project_id=project.id,
-                participant_id=team_participant.id,
-                version=s["version"],
-                title=s["project"],
-                description="",
-                result=s["result"],
-                status=s["status"],
+            ParticipantMember(
+                participant_id=participant.id,
+                user_id=user.id,
+                role_in_team=role,
             )
         )
-        counts["submissions_created"] += 1
+        counts["members_created"] += 1
+
+    db.flush()
+
+    # ── Portraits ── (original kept beside the processed copy, like me.py)
+    for u in _user_data():
+        user = user_by_email.get(u["email"])
+        if user is None:
+            continue
+        have_file = bool(
+            user.portrait_path and (upload_root / user.portrait_path).exists()
+        )
+        if have_file:
+            continue
+        root = upload_root / "portraits" / user.id
+        root.mkdir(parents=True, exist_ok=True)
+        original = demo_art.generate_art(f"portrait:{u['email']}", "sprout", (480, 480))
+        original_path = root / "original.png"
+        original_path.write_bytes(original)
+        processed = demo_art.generate_processed_art(
+            f"portrait:{u['email']}", "sprout", size=(480, 480)
+        )
+        processed_path = root / f"processed-{hashlib.sha256(processed).hexdigest()[:12]}.png"
+        processed_path.write_bytes(processed)
+        user.portrait_original_path = str(original_path.relative_to(upload_root))
+        user.portrait_path = str(processed_path.relative_to(upload_root))
+        user.portrait_effect = "dither"
+        user.portrait_contrast = 1.8
+        user.portrait_brightness = 0
+        user.portrait_scale = 0.4
+        counts["portraits_created"] += 1
+
+    # ── Project covers ──
+    for proj in _project_data():
+        project = project_by_title.get(proj["title"])
+        if project is None:
+            continue
+        have_cover = bool(
+            project.image
+            and project.image.startswith("/uploads/")
+            and (upload_root / project.image[len("/uploads/"):]).exists()
+        )
+        if have_cover or (project.image and not project.image.startswith("/uploads/")):
+            continue
+        motif = "lattice" if proj["status"] == "rejected" else _TRACK_MOTIF.get(proj["track"], "bloom")
+        cover = demo_art.generate_processed_art(f"project:{proj['title']}", motif)
+        slug = re.sub(r"[^a-z0-9-]+", "-", proj["title"].lower()).strip("-")
+        cover_dir = upload_root / "projects" / slug
+        cover_dir.mkdir(parents=True, exist_ok=True)
+        cover_path = cover_dir / f"cover-{hashlib.sha256(cover).hexdigest()[:12]}.png"
+        cover_path.write_bytes(cover)
+        project.image = f"/uploads/{cover_path.relative_to(upload_root).as_posix()}"
+        counts["project_images_created"] += 1
+
+    # ── Submission enrichment: descriptions, payloads, plates, reports ──
+    def _attach(submission: Submission, filename_seed: str, data: bytes, mime: str) -> None:
+        sha = hashlib.sha256(data).hexdigest()
+        existing_file = (
+            db.query(File)
+            .filter(File.submission_id == submission.id, File.sha256 == sha)
+            .first()
+        )
+        ext = "png" if mime == "image/png" else "md"
+        file_dir = upload_root / event_id / submission.participant_id / submission.id
+        abs_path = file_dir / f"{sha[:12]}.{ext}"
+        if existing_file and abs_path.exists():
+            return
+        file_dir.mkdir(parents=True, exist_ok=True)
+        abs_path.write_bytes(data)
+        if not existing_file:
+            db.add(
+                File(
+                    submission_id=submission.id,
+                    path=str(abs_path.relative_to(upload_root).as_posix()),
+                    mime_type=mime,
+                    size_bytes=len(data),
+                    sha256=sha,
+                )
+            )
+            counts["files_created"] += 1
+
+    for (title, version), extra in _SUBMISSION_ENRICHMENT.items():
+        submission = submission_by_key.get((title, version))
+        if submission is None:
+            continue
+        if extra["description"] and not submission.description:
+            submission.description = extra["description"]
+        if extra["payload"] and not submission.payload_json:
+            submission.payload_json = json.dumps(extra["payload"])
+        for plate_seed, motif in extra["plates"]:
+            _attach(submission, plate_seed, demo_art.generate_processed_art(plate_seed, motif), "image/png")
+        if extra["report"]:
+            _attach(
+                submission,
+                f"report:{title}",
+                _report_md(extra["report"]).encode("utf-8"),
+                "text/markdown",
+            )
+
+    db.flush()
+
+    # ── Scores ── (default scorer, pinned, so an active WASM scorer on the
+    # instance cannot skew the demo ladder; idempotent via the
+    # (submission, scorer_version) upsert)
+    from app.models.score import Score
+    from app.scoring.default_scorer import DefaultScorer
+    from app.services.scoring_service import score_submission
+
+    scorer = DefaultScorer()
+    for title, version in _SCORED_FINALS:
+        submission = submission_by_key.get((title, version))
+        if submission is None:
+            continue
+        already_scored = (
+            db.query(Score)
+            .filter(
+                Score.submission_id == submission.id,
+                Score.scorer_version == scorer.version,
+                Score.status == "scored",
+            )
+            .first()
+        )
+        if already_scored:
+            continue
+        score_submission(db, submission.id, scorer=scorer)
+        counts["scores_created"] += 1
+
+    # ── Applications ── (the petition desk gets a queue to demo)
+    for a in _application_data():
+        if db.query(Application).filter(Application.email == a["email"]).first():
+            continue
+        row = Application(
+            name=a["name"],
+            email=a["email"],
+            team=a["team"],
+            project_interest=a["interest"],
+            status=a["status"],
+            source="form",
+        )
+        if a["status"] == "rejected":
+            row.decided_at = base_login + timedelta(hours=1)
+        db.add(row)
+        counts["applications_created"] += 1
 
     db.commit()
     return counts
