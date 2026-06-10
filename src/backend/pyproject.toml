@@ -2,7 +2,7 @@
 name = "hackritual"
 version = "0.1.0"
 description = "An easy-to-summon platform for ritualised collaborative invention."
-readme = "../README.md"
+readme = "../../README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 keywords = ["hackathon", "event", "platform", "fastapi"]
