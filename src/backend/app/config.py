@@ -5,7 +5,7 @@ Uses pydantic-settings for validation and .env file support in local dev.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -62,13 +62,16 @@ class Settings(BaseSettings):
     admin_password: str
 
     # ------------------------------------------------------------------ #
-    # Event metadata
+    # Event metadata — defaults are placeholders; the Event record is seeded
+    # from these on FIRST boot only, and the admin panel edits the record
+    # afterwards (PATCH /api/admin/event/meta). The DB record is the source
+    # of truth for title/dates once it exists.
     # ------------------------------------------------------------------ #
-    event_id: str
-    event_title: str
+    event_id: str = "hackritual-event"
+    event_title: str = "HackRitual"
     event_type: str = "hackathon"
-    event_start: datetime
-    event_end: datetime
+    event_start: datetime = datetime(2030, 1, 1, 9, 0, tzinfo=UTC)
+    event_end: datetime = datetime(2030, 1, 2, 17, 0, tzinfo=UTC)
     # When true, a background task advances DRAFT→OPEN at EVENT_START and
     # OPEN→FROZEN at EVENT_END. The ritual otherwise advances only by hand.
     auto_transitions: bool = False

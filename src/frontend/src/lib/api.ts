@@ -576,6 +576,20 @@ export const api = {
       body: JSON.stringify({ state, reason, confirm }),
     }),
 
+  // Edit the event's identity — title, type, dates. The env vars only seed
+  // these on first boot; the panel owns them afterwards.
+  updateEventMeta: (input: {
+    title?: string;
+    type?: string;
+    start?: string;
+    end?: string;
+  }) =>
+    requireJson<EventDTO>('/api/admin/event/meta', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
   // ── admin console roll-ups (require_admin; null in demo / non-admin) ──
   // Server-authoritative aggregations. Returns null when the dedicated
   // endpoint is unreachable or the session isn't an admin, so callers can fall
