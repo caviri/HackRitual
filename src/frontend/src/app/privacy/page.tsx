@@ -33,7 +33,7 @@ export default function PrivacyPage() {
               <span className="text-primary mr-2" aria-hidden>
                 ◆
               </span>
-              Your email address — to send login codes and event notices.
+              Your email address — for your account, and so the organizers can reach you.
             </li>
             <li>
               <span className="text-primary mr-2" aria-hidden>

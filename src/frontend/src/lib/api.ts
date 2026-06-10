@@ -296,6 +296,61 @@ export interface UploadDTO {
   created_at: string;
 }
 
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ApplicationUserDTO {
+  id: string;
+  email: string;
+  display_name: string | null;
+  access_password: string | null;
+}
+
+export interface ApplicationDTO {
+  id: string;
+  name: string;
+  email: string;
+  team: string | null;
+  project_interest: string | null;
+  status: ApplicationStatus;
+  source: 'form' | 'import';
+  user_id: string | null;
+  created_at: string;
+  decided_at: string | null;
+  user: ApplicationUserDTO | null;
+}
+
+export interface ApplicationListDTO {
+  applications: ApplicationDTO[];
+  total: number;
+  counts: Record<ApplicationStatus, number>;
+}
+
+export interface CsvImportRowDTO {
+  application_id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  team: string | null;
+  access_password: string;
+}
+
+export interface CsvImportResultDTO {
+  created: CsvImportRowDTO[];
+  skipped: { row: number; email: string; reason: string }[];
+  errors: { row: number; reason: string }[];
+}
+
+export interface AdminUserDTO {
+  id: string;
+  email: string;
+  display_name: string | null;
+  role: string;
+  status: string;
+  access_password: string | null;
+  created_at: string;
+  last_login_at: string | null;
+}
+
 const BASE = '';
 
 export async function fetchJson<T>(path: string, fallback: T): Promise<T> {
@@ -389,22 +444,57 @@ export const api = {
   },
 
   // ── auth (form callers throw on failure)
-  requestCode: (email: string) =>
-    requireJson<void>('/api/auth/request-code', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
-    }),
-
-  verifyCode: (email: string, code: string) =>
+  login: (password: string) =>
     requireJson<{ user: { id: string; email: string; role: string } }>(
-      '/api/auth/verify-code',
+      '/api/auth/login',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email, code }),
+        body: JSON.stringify({ password }),
       },
     ),
+
+  // ── applications (the petition desk)
+  submitApplication: (input: {
+    name: string;
+    email: string;
+    team?: string;
+    project_interest?: string;
+  }) =>
+    requireJson<{ id: string; status: string }>('/api/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  adminApplications: (status?: ApplicationStatus) =>
+    requireJson<ApplicationListDTO>(
+      `/api/admin/applications${status ? `?status=${status}` : ''}`,
+    ),
+
+  approveApplication: (id: string) =>
+    requireJson<ApplicationDTO>(`/api/admin/applications/${id}/approve`, {
+      method: 'POST',
+    }),
+
+  rejectApplication: (id: string) =>
+    requireJson<ApplicationDTO>(`/api/admin/applications/${id}/reject`, {
+      method: 'POST',
+    }),
+
+  importUsersCsv: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return requireJson<CsvImportResultDTO>('/api/admin/users/import-csv', {
+      method: 'POST',
+      body: form,
+    });
+  },
+
+  regeneratePassword: (userId: string) =>
+    requireJson<AdminUserDTO>(`/api/admin/users/${userId}/regenerate-password`, {
+      method: 'POST',
+    }),
 
   me: () =>
     fetchJson<MeDTO | null>('/api/auth/me', null),
