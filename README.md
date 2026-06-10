@@ -10,6 +10,9 @@ A FastAPI backend serves both the REST API and a Next.js static export; there is
 no Node.js runtime in production. The whole state of an event lives in one file
 on disk.
 
+**See the demo** → [katospiegel-hackritual.hf.space](https://katospiegel-hackritual.hf.space/) ·
+**Docs** → [caviri.github.io/HackRitual](https://caviri.github.io/HackRitual/)
+
 ---
 
 ## The ritual states

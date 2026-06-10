@@ -15,6 +15,10 @@ Summon → Gather → Create → Conclude → Archive → Release
 
 Deploy it, run your event, export a structured JSON archive, then tear it down.
 
+**See it live** → [katospiegel-hackritual.hf.space](https://katospiegel-hackritual.hf.space/) —
+a running instance with demo mode on: flip the stage bar to walk the ritual
+through every state, from the circle being drawn to the sealed record.
+
 ---
 
 ## Documentation Index
