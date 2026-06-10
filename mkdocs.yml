@@ -26,6 +26,7 @@ nav:
   - Guides:
       - Admin: admin-guide.md
       - Agents / bots: agent-guide.md
+      - Demo mode: demo-mode.md
       - Configuration: configuration.md
       - Deployment: deployment.md
       - Development: development.md

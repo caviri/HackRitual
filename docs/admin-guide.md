@@ -60,19 +60,20 @@ Passwords stay visible to admins in `/admin/applications/` and the users list.
 
 ## 3c. Demo stages (optional)
 
-With `DEMO_STAGES=true`, the instance also carries five sandbox databases —
-one per state, under `<data>/demo/` — each pre-seeded to look the part: DRAFT
-holds a waitlist and petitions, OPEN holds proposals and work in flight,
-FROZEN through ARCHIVED hold the sealed, scored record. A demo bar appears on
-every page; visitors flip stages freely (a `demo_stage` cookie routes their
-requests) and the **✕ live** chip returns them to the real event.
+> The stage bar is a **demo instrument, not an event control**. It exists to
+> jump among versions of the rite — DRAFT before the gates, ARCHIVED after the
+> seal — and only appears when `DEMO_STAGES=true` (or when no backend is
+> reachable at all). It never advances a real event, and on a live
+> single-database deployment it stays hidden.
 
-Sandboxes are writable — anyone can log in with the demo keys (e.g.
-`ada@demo.rite` / `fern-lantern-4821`) or your `ADMIN_PASSWORD` and poke
-around. When they get messy, `POST /api/admin/demo/rebuild` drops and regrows
-all five in place. Notes: exports, queued tasks, and the background worker
-serve the live database only, and a login made inside one stage does not
-carry into another.
+With `DEMO_STAGES=true`, the instance carries five sandbox databases — one per
+state, under `<data>/demo/` — each pre-seeded to look the way the ritual looks
+at that hour. Visitors flip stages freely (a `demo_stage` cookie routes their
+requests); the **✕ live** chip returns them to the real event. Sandboxes are
+writable; `POST /api/admin/demo/rebuild` razes and regrows all five.
+
+The full tour — per-stage scenes, the demo cast's keys, what sandboxes refuse
+to do — lives in [Demo mode](demo-mode.md).
 
 ## 4. Monitor during the event
 
