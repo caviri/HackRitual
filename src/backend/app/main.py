@@ -390,10 +390,12 @@ def create_app() -> FastAPI:
 
     # ---------------------------------------------------------------- #
     # Uploaded files (server-side dithered images) served at /uploads/*
+    # Created here so files written later (uploads, demo seed) are served
+    # without a restart.
     # ---------------------------------------------------------------- #
     from app.config import settings as _s
-    if os.path.isdir(_s.upload_dir):
-        app.mount("/uploads", StaticFiles(directory=_s.upload_dir), name="uploads")
+    os.makedirs(_s.upload_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=_s.upload_dir), name="uploads")
 
     # ---------------------------------------------------------------- #
     # Scaffold companion UI (dev tool — mounted before Next.js catch-all)

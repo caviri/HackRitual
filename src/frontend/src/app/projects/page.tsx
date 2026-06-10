@@ -26,6 +26,7 @@ interface ProjectRow {
   status?: string;
   versions?: number;
   imageSeed: string;
+  imageSrc?: string;
 }
 
 export default function ProjectsPage() {
@@ -80,6 +81,7 @@ export default function ProjectsPage() {
           href: `/project/?id=${p.id}`,
           status: p.status,
           imageSeed: p.title,
+          imageSrc: p.image ?? undefined,
         }))
     : data.proposals.map((p) => ({
         key: String(p.id),
@@ -174,6 +176,7 @@ export default function ProjectsPage() {
                 >
                   <DitheredImage
                     seed={p.imageSeed}
+                    src={p.imageSrc}
                     variant="bloom"
                     alt={p.title}
                     className="aspect-[4/3] w-full"
