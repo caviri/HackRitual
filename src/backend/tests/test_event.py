@@ -6,7 +6,7 @@ the audit history, and the pure auto-transition decision function.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import status
@@ -28,8 +28,8 @@ def _reset_event(state: str = "DRAFT", config_json: str | None = None) -> str:
                 id="test-event",
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(event)
         event.state = state
@@ -284,24 +284,24 @@ class TestNextAutoState:
     def test_draft_opens_at_start(self):
         from app.services.event import next_auto_state
 
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        end = datetime(2026, 1, 2, tzinfo=UTC)
         assert next_auto_state("DRAFT", start - timedelta(hours=1), start, end) is None
         assert next_auto_state("DRAFT", start, start, end) == "OPEN"
 
     def test_open_freezes_at_end(self):
         from app.services.event import next_auto_state
 
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        end = datetime(2026, 1, 2, tzinfo=UTC)
         assert next_auto_state("OPEN", end - timedelta(hours=1), start, end) is None
         assert next_auto_state("OPEN", end, start, end) == "FROZEN"
 
     def test_terminal_states_never_transition(self):
         from app.services.event import next_auto_state
 
-        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        end = datetime(2026, 1, 2, tzinfo=UTC)
         later = end + timedelta(days=10)
         for state in ("FROZEN", "FINAL", "ARCHIVED"):
             assert next_auto_state(state, later, start, end) is None
@@ -312,5 +312,74 @@ class TestNextAutoState:
         # Event start/end may come back naive from SQLite — must still compare.
         start = datetime(2026, 1, 1)
         end = datetime(2026, 1, 2)
-        now = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
+        now = datetime(2026, 1, 1, 12, tzinfo=UTC)
         assert next_auto_state("DRAFT", now, start, end) == "OPEN"
+
+
+# ============================================================================ #
+# Admin — event identity (PATCH /api/admin/event/meta)
+# ============================================================================ #
+class TestEventMeta:
+    @pytest.mark.asyncio
+    async def test_update_title_and_dates(self, client):
+        _reset_event("DRAFT")
+        token = _make_user("admin")
+        resp = await client.patch(
+            "/api/admin/event/meta",
+            json={
+                "title": "The Renamed Rite",
+                "start": "2026-09-01T09:00:00+00:00",
+                "end": "2026-09-02T17:00:00+00:00",
+            },
+            headers=_headers(token),
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["title"] == "The Renamed Rite"
+        assert body["start"].startswith("2026-09-01")
+        assert body["end"].startswith("2026-09-02")
+
+    @pytest.mark.asyncio
+    async def test_meta_editable_in_any_state(self, client):
+        _reset_event("FROZEN")
+        token = _make_user("admin")
+        resp = await client.patch(
+            "/api/admin/event/meta",
+            json={"title": "Renamed While Frozen"},
+            headers=_headers(token),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Renamed While Frozen"
+        _reset_event("DRAFT")
+
+    @pytest.mark.asyncio
+    async def test_meta_rejects_end_before_start(self, client):
+        _reset_event("DRAFT")
+        token = _make_user("admin")
+        resp = await client.patch(
+            "/api/admin/event/meta",
+            json={
+                "start": "2026-09-02T09:00:00+00:00",
+                "end": "2026-09-01T09:00:00+00:00",
+            },
+            headers=_headers(token),
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_meta_rejects_empty_payload(self, client):
+        token = _make_user("admin")
+        resp = await client.patch(
+            "/api/admin/event/meta", json={}, headers=_headers(token)
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_meta_requires_admin(self, client):
+        token = _make_user("user")
+        resp = await client.patch(
+            "/api/admin/event/meta",
+            json={"title": "Nope"},
+            headers=_headers(token),
+        )
+        assert resp.status_code == 403

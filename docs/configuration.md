@@ -14,10 +14,6 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 |----------|-------------|---------|
 | `APP_BASE_URL` | Public URL of the instance (CORS, secure-cookie detection) | `https://myevent.hf.space` |
 | `JWT_SECRET` | Secret for signing JWTs. Must be stable across restarts. | `python3 -c "import secrets;print(secrets.token_hex(32))"` |
-| `EVENT_ID` | Unique event id (no spaces) | `hackritual-bern-2026` |
-| `EVENT_TITLE` | Display title | `HackRitual Bern 2026` |
-| `EVENT_START` | ISO 8601 start datetime | `2026-03-01T09:00:00+01:00` |
-| `EVENT_END` | ISO 8601 end datetime | `2026-03-02T17:00:00+01:00` |
 | `ADMIN_SEED_EMAILS` | Comma-separated admin emails; the first is the primary admin | `you@example.com` |
 | `ADMIN_PASSWORD` | The primary admin's login password (min 8 chars) | `a-long-strong-phrase` |
 
@@ -32,6 +28,10 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `EVENT_ID` | `hackritual-event` | Unique event id (no spaces). Seeds the event record on first boot. |
+| `EVENT_TITLE` | `HackRitual` | Display title — editable afterwards in the admin panel ("event identity"). |
+| `EVENT_START` | placeholder (2030) | ISO 8601 start — editable in the admin panel. |
+| `EVENT_END` | placeholder (2030) | ISO 8601 end — editable in the admin panel. |
 | `DB_PATH` | `/data/app.db` | SQLite database path |
 | `UPLOAD_DIR` | `/data/uploads` | Upload directory |
 | `EVENT_TYPE` | `hackathon` | Event type label |

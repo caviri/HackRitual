@@ -43,7 +43,6 @@ async def _auto_transition_loop(interval_seconds: int = 60) -> None:
     """
     from datetime import datetime
 
-    from app.config import settings
     from app.database import SessionLocal
     from app.services.audit import log_action
     from app.services.event import get_event, next_auto_state
@@ -53,11 +52,13 @@ async def _auto_transition_loop(interval_seconds: int = 60) -> None:
             await asyncio.sleep(interval_seconds)
             with SessionLocal() as db:
                 event = get_event(db)
+                # The event record owns the dates — admins edit them in the
+                # panel; the env vars only seeded the record on first boot.
                 target = next_auto_state(
                     event.state,
                     datetime.now(UTC),
-                    settings.event_start,
-                    settings.event_end,
+                    event.start_at,
+                    event.end_at,
                 )
                 if target:
                     previous = event.state

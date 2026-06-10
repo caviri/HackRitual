@@ -187,6 +187,9 @@ export default function AdminPage() {
             </div>
           </article>
 
+          {/* event identity */}
+          <EventMetaCard event={event} onSaved={setEvent} />
+
           {/* awaiting your action */}
           <article>
             <h2 className="font-display italic text-2xl text-fg mb-4">
@@ -425,6 +428,113 @@ export default function AdminPage() {
         </aside>
       </section>
     </>
+  );
+}
+
+function EventMetaCard({
+  event,
+  onSaved,
+}: {
+  event: EventDTO | null;
+  onSaved: (e: EventDTO) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  // datetime-local wants "YYYY-MM-DDTHH:MM"
+  const toLocal = (iso?: string | null) => (iso ? iso.slice(0, 16) : '');
+
+  useEffect(() => {
+    if (!event) return;
+    const e = event as unknown as { title: string; start?: string; end?: string; start_at?: string; end_at?: string };
+    setTitle(e.title ?? '');
+    setStart(toLocal(e.start ?? e.start_at));
+    setEnd(toLocal(e.end ?? e.end_at));
+  }, [event]);
+
+  async function save(ev: React.FormEvent) {
+    ev.preventDefault();
+    setBusy(true);
+    setNote(null);
+    try {
+      const updated = await api.updateEventMeta({
+        title: title.trim() || undefined,
+        start: start || undefined,
+        end: end || undefined,
+      });
+      onSaved(updated);
+      setNote('inscribed.');
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setNote(`save failed: ${err.body || err.status}`);
+      } else {
+        setNote(`save failed: ${String(err)}`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="ascii-frame p-6">
+      <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
+        event identity
+      </p>
+      <p className="font-display italic text-2xl text-fg mb-2">
+        Name the rite, set its window.
+      </p>
+      <p className="text-fg-muted text-[0.95rem] leading-relaxed mb-6">
+        The env vars only seed these on first boot — from here on, this card
+        owns the title and dates shown across the site (and used by
+        auto-transitions, if enabled).
+      </p>
+      <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
+        <label className="block sm:col-span-2">
+          <span className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-dim">
+            title
+          </span>
+          <input
+            type="text"
+            required
+            maxLength={200}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="mt-2 w-full bg-bg-elev border border-rule text-fg font-mono px-3 py-2.5 outline-none focus:border-primary transition-colors"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-dim">
+            starts
+          </span>
+          <input
+            type="datetime-local"
+            value={start}
+            onChange={(e) => setStart(e.target.value)}
+            className="mt-2 w-full bg-bg-elev border border-rule text-fg font-mono px-3 py-2.5 outline-none focus:border-primary transition-colors"
+          />
+        </label>
+        <label className="block">
+          <span className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-dim">
+            ends
+          </span>
+          <input
+            type="datetime-local"
+            value={end}
+            onChange={(e) => setEnd(e.target.value)}
+            className="mt-2 w-full bg-bg-elev border border-rule text-fg font-mono px-3 py-2.5 outline-none focus:border-primary transition-colors"
+          />
+        </label>
+        <div className="sm:col-span-2 flex items-center gap-3">
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? 'inscribing…' : '◆ save event identity'}
+          </button>
+          {note && <span className="font-mono text-[0.78rem] text-warm">▸ {note}</span>}
+        </div>
+      </form>
+    </article>
   );
 }
 

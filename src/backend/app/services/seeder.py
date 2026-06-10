@@ -10,7 +10,6 @@ submissions key on (project, participant, version).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +22,7 @@ from app.models.submission import Submission
 from app.models.track import Track
 
 
-def _track_data() -> List[Dict]:
+def _track_data() -> list[dict]:
     return [
         {
             "name": "data-science",
@@ -40,7 +39,7 @@ def _track_data() -> List[Dict]:
     ]
 
 
-def _phase_data(event_start: datetime, event_end: datetime) -> List[Dict]:
+def _phase_data(event_start: datetime, event_end: datetime) -> list[dict]:
     span = event_end - event_start
     third = span / 3
     return [
@@ -65,7 +64,7 @@ def _phase_data(event_start: datetime, event_end: datetime) -> List[Dict]:
     ]
 
 
-def _page_data() -> List[Dict]:
+def _page_data() -> list[dict]:
     return [
         {
             "title": "The Rites",
@@ -100,7 +99,7 @@ def _page_data() -> List[Dict]:
     ]
 
 
-def _participant_data() -> List[Dict]:
+def _participant_data() -> list[dict]:
     return [
         # Humans
         {"display_name": "Ada Cole", "type": "human", "affiliation": "MIT · data-science", "is_waiting": False},
@@ -120,7 +119,7 @@ def _participant_data() -> List[Dict]:
     ]
 
 
-def _project_data() -> List[Dict]:
+def _project_data() -> list[dict]:
     return [
         {
             "title": "mycelium-mesh",
@@ -209,7 +208,7 @@ def _project_data() -> List[Dict]:
     ]
 
 
-def _submission_data() -> List[Dict]:
+def _submission_data() -> list[dict]:
     """One row per (project, version). Higher version = more recent."""
     return [
         # mycelium-mesh — 3 versions, latest final
@@ -235,9 +234,9 @@ def _submission_data() -> List[Dict]:
     ]
 
 
-def seed_fixtures(db: Session) -> Dict[str, int]:
+def seed_fixtures(db: Session) -> dict[str, int]:
     """Idempotently insert fixture rows. Returns a count summary."""
-    counts: Dict[str, int] = {
+    counts: dict[str, int] = {
         "tracks_created": 0,
         "phases_created": 0,
         "pages_created": 0,
@@ -248,7 +247,7 @@ def seed_fixtures(db: Session) -> Dict[str, int]:
     event_id = settings.event_id
 
     # ── Tracks ──
-    track_by_name: Dict[str, Track] = {}
+    track_by_name: dict[str, Track] = {}
     for t in _track_data():
         existing = (
             db.query(Track)
@@ -268,8 +267,14 @@ def seed_fixtures(db: Session) -> Dict[str, int]:
         track_by_name[t["name"]] = row
         counts["tracks_created"] += 1
 
-    # ── Phases ──
-    for p in _phase_data(settings.event_start, settings.event_end):
+    # ── Phases ── (dates come from the event record — the panel may have
+    # edited them since the env-var seed)
+    from app.models.event import Event
+
+    event = db.get(Event, event_id)
+    phase_start = event.start_at if event else settings.event_start
+    phase_end = event.end_at if event else settings.event_end
+    for p in _phase_data(phase_start, phase_end):
         existing = (
             db.query(Phase)
             .filter(Phase.event_id == event_id, Phase.name == p["name"])
@@ -309,7 +314,7 @@ def seed_fixtures(db: Session) -> Dict[str, int]:
         counts["pages_created"] += 1
 
     # ── Participants ──
-    participant_by_name: Dict[str, Participant] = {}
+    participant_by_name: dict[str, Participant] = {}
     for p in _participant_data():
         existing = (
             db.query(Participant)
@@ -338,7 +343,7 @@ def seed_fixtures(db: Session) -> Dict[str, int]:
     db.flush()
 
     # ── Projects ──
-    project_by_title: Dict[str, Project] = {}
+    project_by_title: dict[str, Project] = {}
     for proj in _project_data():
         existing = (
             db.query(Project)

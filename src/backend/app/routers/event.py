@@ -8,7 +8,7 @@ Singleton Event endpoints.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -22,6 +22,7 @@ from app.schemas.event import (
     AuditEntry,
     EventConfig,
     EventConfigUpdate,
+    EventMetaUpdate,
     EventResponse,
     StateTransitionRequest,
     StateTransitionResponse,
@@ -75,7 +76,7 @@ def transition_state(
     validate_transition(previous, body.state, confirm=body.confirm)
 
     event.state = body.state
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     event.updated_at = now
     log_action(
         db,
@@ -99,6 +100,57 @@ def transition_state(
         transitioned_at=now,
         transitioned_by=admin.email,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Admin — identity (title, type, dates)
+# --------------------------------------------------------------------------- #
+@admin_router.patch("/meta", response_model=EventResponse)
+def update_meta(
+    body: EventMetaUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> EventResponse:
+    """Edit the event's title, type, and start/end dates.
+
+    The env vars only seed these on first boot; afterwards this endpoint
+    owns them. Editable in any state — renaming the rite is never destructive.
+    """
+    event = get_event(db)
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "no fields to update")
+
+    start = changes.get("start", event.start_at)
+    end = changes.get("end", event.end_at)
+    if start and end:
+        # Normalise aware/naive before comparing (SQLite stores naive UTC).
+        s = start.replace(tzinfo=None) if start.tzinfo else start
+        e = end.replace(tzinfo=None) if end.tzinfo else end
+        if e <= s:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "end must be after start")
+
+    if "title" in changes:
+        event.title = changes["title"].strip()
+    if "type" in changes:
+        event.type = changes["type"].strip()
+    if "start" in changes:
+        event.start_at = changes["start"]
+    if "end" in changes:
+        event.end_at = changes["end"]
+    event.updated_at = datetime.now(UTC)
+
+    log_action(
+        db,
+        "event.meta_updated",
+        actor_id=admin.id,
+        target_type="event",
+        target_id=event.id,
+        metadata={"fields": sorted(changes.keys())},
+    )
+    db.commit()
+    db.refresh(event)
+    return _to_response(event)
 
 
 # --------------------------------------------------------------------------- #
@@ -132,7 +184,7 @@ def update_config(
     config = load_config(event)
     config.update(changes)
     event.config_json = dump_config(config)
-    event.updated_at = datetime.now(timezone.utc)
+    event.updated_at = datetime.now(UTC)
     log_action(
         db,
         "event.config_updated",
