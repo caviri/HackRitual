@@ -40,6 +40,20 @@ class TestSettingsValidation:
         with pytest.raises(ValidationError, match="ADMIN_PASSWORD"):
             _make_settings(admin_password="short")
 
+    def test_rejects_db_inside_upload_dir(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="UPLOAD_DIR"):
+            _make_settings(db_path="/data/uploads/app.db", upload_dir="/data/uploads")
+
+    def test_rejects_db_when_upload_dir_is_data_root(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="UPLOAD_DIR"):
+            _make_settings(db_path="/data/app.db", upload_dir="/data")
+
+    def test_allows_sibling_db_and_upload_dirs(self):
+        s = _make_settings(db_path="/data/app.db", upload_dir="/data/uploads")
+        assert s.db_path == "/data/app.db"
+
     def test_invalid_log_level_rejected(self):
         from pydantic import ValidationError
         with pytest.raises(ValidationError, match="LOG_LEVEL"):
