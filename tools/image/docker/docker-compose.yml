@@ -1,0 +1,108 @@
+# =============================================================================
+# HackRitual — Local development compose
+#
+# Lives at tools/image/docker/. Run it from anywhere with an explicit -f; all
+# paths below are relative to THIS file (../../.. is the repository root):
+#
+#   docker compose -f tools/image/docker/docker-compose.yml up --build
+#   docker compose -f tools/image/docker/docker-compose.yml run --rm test
+#   docker compose -f tools/image/docker/docker-compose.yml run --rm sim
+#
+# Backend hot-reload:  source changes are picked up automatically
+# Frontend hot-reload: run `cd src/frontend && pnpm dev` separately (port 3000)
+#                      The Next.js dev server proxies /api/* to port 7860.
+# =============================================================================
+
+services:
+  app:
+    build:
+      context: ../../..
+      dockerfile: tools/image/docker/Dockerfile
+    ports:
+      - "7860:7860"
+    volumes:
+      # Backend hot-reload source mount
+      - ../../../src/backend:/app/backend
+      # Persistent local data
+      - ../../../data:/data
+    env_file:
+      - ../../../.env
+    environment:
+      # Override DB path to use local ./data volume
+      DB_PATH: /data/app.db
+      UPLOAD_DIR: /data/uploads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:7860/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Test runner — the backend suite, in a container.
+  #
+  #   docker compose -f tools/image/docker/docker-compose.yml run --rm test
+  #   ... run --rm test python -m pytest tests/test_event.py -v
+  #
+  # Uses the uv base image (no frontend build needed) and installs the dev
+  # extras on first run. Tests inject their own env via conftest, so no .env
+  # is required. Lives behind the `test` profile so `compose up` ignores it;
+  # `compose run` starts it regardless of profile.
+  # ---------------------------------------------------------------------------
+  test:
+    image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+    profiles: ["test"]
+    working_dir: /app/src/backend
+    volumes:
+      # Mount the whole repo so scaffold tests can read .dev/, docs/, and the
+      # root markdown files that live above src/backend/.
+      - ../../..:/app
+    command:
+      - sh
+      - -c
+      - >-
+        uv pip install --system --no-cache
+        -r requirements.txt pytest==8.3.4 pytest-asyncio==0.24.0
+        httpx==0.28.1 anyio==4.7.0
+        && python -m pytest -v
+
+  # ---------------------------------------------------------------------------
+  # Ritual simulator — the Rite of Many Hands.
+  #
+  #   docker compose -f tools/image/docker/docker-compose.yml run --rm sim
+  #   ... run --rm sim python -m app.cli simulate --keep
+  #
+  # Summons human + machine agents and drives the event through every state
+  # over the real API. Self-contained: its own throwaway SQLite DB in /tmp and
+  # a console-mode SMTP, so it needs no .env. Behind the `sim` profile.
+  # ---------------------------------------------------------------------------
+  sim:
+    image: ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+    profiles: ["sim"]
+    working_dir: /app/src/backend
+    volumes:
+      - ../../..:/app
+    environment:
+      APP_BASE_URL: http://localhost:7860
+      JWT_SECRET: ritual-sim-secret
+      ADMIN_SEED_EMAILS: archivist@rite.local
+      SMTP_HOST: console
+      SMTP_USER: x
+      SMTP_PASS: x
+      SMTP_FROM: x@rite.local
+      EVENT_ID: rite-demo
+      EVENT_TITLE: The Rite of Many Hands
+      EVENT_START: "2026-01-01T09:00:00+00:00"
+      EVENT_END: "2026-01-02T17:00:00+00:00"
+      DB_PATH: /tmp/rite.db
+      UPLOAD_DIR: /tmp/uploads
+      LOG_LEVEL: ERROR
+    command:
+      - sh
+      - -c
+      - >-
+        uv pip install --system --no-cache
+        -r requirements.txt typer==0.15.1 'click<8.2' rich==13.9.4 httpx==0.28.1
+        && python -m app.cli simulate

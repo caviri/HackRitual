@@ -18,12 +18,12 @@ http(s)://<APP_BASE_URL>/api/
 ### Human users — JWT cookie
 
 1. Request a login code: `POST /api/auth/request-code`
-2. Verify the code: `POST /api/auth/verify-code`  → sets `hackritual_session` HTTP-only cookie
+2. Verify the code: `POST /api/auth/verify-code`  → sets `session` HTTP-only cookie
 3. All subsequent requests carry the cookie automatically (browser) or explicitly (API clients)
 4. Logout: `POST /api/auth/logout` → clears cookie
 
 ```
-Cookie: hackritual_session=<JWT>
+Cookie: session=<JWT>
 ```
 
 JWT payload:
@@ -46,80 +46,42 @@ The API key is issued once at agent creation and never stored in plain text.
 
 ---
 
-## Endpoint Groups
+## Complete endpoint reference
 
-### System
+This page is the **conceptual** overview (auth, conventions, limits). For the
+exhaustive, always-current list of every endpoint — paths, methods, parameters,
+request/response bodies, and schemas — use the generated reference, which is
+derived directly from the running app's OpenAPI spec:
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/health` | None | Health check — DB status, storage mode, event state |
+- **[Full API reference](./api-reference.md)** — every operation + schema, in Markdown.
+- **[Interactive explorer (ReDoc)](./redoc.html)** — browse and read the spec in your browser.
+- **[`openapi.json`](./openapi.json)** — the machine-readable contract. Feed it to a
+  generator to scaffold a typed client:
+  ```bash
+  npx openapi-typescript docs/openapi.json -o client/schema.ts   # TypeScript types
+  openapi-generator-cli generate -i docs/openapi.json -g python -o client/py  # Python client
+  ```
 
-### Auth (Step 03)
+On a running server the same spec is live at `/api/openapi.json`, with
+`/api/docs` (Swagger UI) and `/api/redoc` (ReDoc).
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/auth/request-code` | None | Send login code to email |
-| POST | `/api/auth/verify-code` | None | Verify code, issue JWT cookie |
-| POST | `/api/auth/logout` | Session | Clear session cookie |
-| GET | `/api/auth/me` | Session | Current user info |
+The endpoints are grouped by tag (auth, participants, projects, submissions,
+scores, agents, event, admin, …). The lifecycle is
+`DRAFT → OPEN → FROZEN → FINAL → ARCHIVED`; submissions are accepted only while
+`OPEN`.
 
-### Users (Step 04)
+## Build your own client / frontend
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/users` | Admin | List all users |
-| GET | `/api/users/{id}` | Admin | Get user details |
-| PATCH | `/api/users/{id}/role` | Admin | Assign role |
-| DELETE | `/api/users/{id}` | Admin | Deactivate user |
+A ready-to-use skill with runnable helpers lives at
+`.agents/skills/hackritual-api/` in the repository:
 
-### Participants (Step 05)
+- `SKILL.md` — the interaction guide (auth flows, key endpoints).
+- `scripts/hackritual.sh` — a curl-based bash CLI.
+- `scripts/hackritual_client.py` — a stdlib-only Python client (`HackRitualClient`),
+  usable as a library or a CLI.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/participants` | Session | List participants |
-| POST | `/api/participants` | Session / Admin | Register participant |
-| GET | `/api/participants/{id}` | Session | Participant profile |
-| PATCH | `/api/participants/{id}` | Owner / Admin | Update profile |
-| POST | `/api/participants/join` | Session | Join team via invite code |
-| POST | `/api/participants/{id}/invite` | Owner / Admin | Generate team invite code |
-| PATCH | `/api/participants/{id}/status` | Admin | Activate / disable / ban |
-
-### Events (Step 06)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/events/current` | None | Current event metadata + state |
-| PATCH | `/api/events/current/state` | Admin | Advance event state |
-| PATCH | `/api/events/current/config` | Admin | Update event config |
-
-### Submissions (Step 07)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/submissions` | Session / Agent | Create submission |
-| GET | `/api/submissions` | Session | List own submissions |
-| GET | `/api/submissions/{id}` | Session / Admin | Submission detail |
-| GET | `/api/submissions/{id}/status` | Session / Agent | Scoring status |
-| DELETE | `/api/submissions/{id}` | Owner / Admin | Withdraw submission |
-
-### Scores & Leaderboard (Step 08)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/leaderboard` | None / Session | Global leaderboard |
-| GET | `/api/scores/{submission_id}` | Owner / Admin | Score detail + breakdown |
-| POST | `/api/admin/rescore` | Admin | Trigger re-score |
-
-### Admin Console (Step 09)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/admin/audit-log` | Admin | Paginated audit log |
-| GET | `/api/admin/agents` | Admin | List agents |
-| POST | `/api/admin/agents` | Admin | Create agent + issue key |
-| DELETE | `/api/admin/agents/{id}/key` | Admin | Revoke agent key |
-| POST | `/api/admin/export` | Admin | Generate export bundle |
-| POST | `/api/admin/export/push` | Admin | Push bundle to GitHub |
+Both cover the full human (magic-link → `session` cookie) and agent (`X-API-Key`)
+flows end to end.
 
 ---
 

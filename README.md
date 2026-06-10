@@ -1,147 +1,95 @@
 # HackRitual
 
-> *An easy-to-summon platform for ritualised collaborative invention.*
 > *Gather your participants. Forge something from nothing. Export the artefact. Dispel the container.*
 
-HackRitual is a **portable, single-container** event platform for hackathons, challenges, and time-bounded collaborative invention. It lives in one Docker image, persists its memory in a single SQLite file, and vanishes without a trace when the ritual is over.
+HackRitual is a **portable, single-container** event platform for hackathons and
+time-bounded collaborative invention. One Docker image, one process, one SQLite
+file. Run the event, export a structured archive, tear it down — no trace left.
 
-Summon it. Run the event. Export a structured JSON archive. Tear it down.
+A FastAPI backend serves both the REST API and a Next.js static export; there is
+no Node.js runtime in production. The whole state of an event lives in one file
+on disk.
 
 ---
 
-## The Ritual States
-
-Every event moves through five sacred phases:
+## The ritual states
 
 ```
 DRAFT → OPEN → FROZEN → FINAL → ARCHIVED
 ```
 
-| State | Meaning |
-|-------|---------|
-| `DRAFT` | The circle is drawn. Configuration is being set. No participants yet. |
-| `OPEN` | The gates are open. Participants join, teams form, submissions flow. |
-| `FROZEN` | The forge cools. Submissions close; scoring begins. |
-| `FINAL` | The verdict is inscribed. Results are public, no changes permitted. |
-| `ARCHIVED` | The ritual is complete. The record is sealed and ready for export. |
-
-See [docs/event-lifecycle.md](docs/event-lifecycle.md) for the full state machine.
+`DRAFT` configure · `OPEN` join, form teams, submit · `FROZEN` submissions close,
+scoring begins · `FINAL` results public, frozen · `ARCHIVED` sealed and ready to
+export. See [docs/event-lifecycle.md](docs/event-lifecycle.md).
 
 ---
 
-## Quick Start
+## Screenshots
 
-### Prerequisites
-
-- [uv](https://docs.astral.sh/uv/) — Python package manager
-- Python 3.11+
-- Node.js 20+ (for frontend development)
-- Docker (for production builds)
-
-### Invoke the Dev Server
-
-```bash
-# 1. Clone the grimoire
-git clone <repo-url>
-cd HackRitual
-
-# 2. Bind the dependencies
-cd backend && uv sync --extra dev && cd ..
-
-# 3. Inscribe your environment
-cp .env.example .env
-# Edit .env — set JWT_SECRET, SMTP_*, EVENT_*, ADMIN_SEED_EMAILS
-
-# 4. Run the migrations (bind the schema to the stone)
-cd backend && uv run hackritual migrate && cd ..
-
-# 5. Summon the server
-cd backend && uv run hackritual serve --reload
-# → http://localhost:7860
-```
-
-### Test the Bindings
-
-```bash
-cd backend && uv run pytest -v
-```
+| | |
+|---|---|
+| ![Landing](docs/screenshots/home.png) | ![Projects](docs/screenshots/projects.png) |
+| ![Submissions](docs/screenshots/submissions.png) | ![Admin console](docs/screenshots/admin.png) |
 
 ---
 
-## CLI
-
-After `uv sync`, the `hackritual` CLI is available in your venv:
-
-```
-hackritual --help
-
-Commands:
-  serve     Summon the API server (uvicorn)
-  migrate   Bind the database schema (Alembic)
-  health    Query the vital signs of a running instance
-  info      Reveal configuration (secrets masked)
-```
-
-Examples:
+## Quick start
 
 ```bash
-# Dev server with hot-reload
-uv run hackritual serve --reload
-
-# Check a deployed instance
-uv run hackritual health --url https://my-space.hf.space
-
-# Inspect configuration
-uv run hackritual info
+git clone <repo-url> && cd HackRitual
+cd src/backend && uv sync --extra dev
+cp ../../.env.example ../../.env   # set JWT_SECRET, SMTP_*, EVENT_*, ADMIN_SEED_EMAILS
+uv run hackritual migrate
+uv run hackritual serve --reload   # → http://localhost:7860
 ```
+
+Tests: `cd src/backend && uv run pytest -v`. The `hackritual` CLI exposes
+`serve`, `migrate`, `health`, and `info` (run `hackritual --help`).
 
 ---
 
-## Docker
+## Run in Docker
 
 ```bash
-# Forge the image
-docker build -f docker/Dockerfile -t hackritual .
-
-# Invoke locally
+docker build -f tools/image/docker/Dockerfile -t hackritual .
 docker run -p 7860:7860 --env-file .env -v $(pwd)/data:/data hackritual
-
-# Verify the summoning
 curl http://localhost:7860/api/health
 ```
+
+Or via compose: `docker compose -f tools/image/docker/docker-compose.yml up --build`.
 
 ---
 
 ## Deploy to Hugging Face Spaces
 
-HackRitual is designed for the HF Spaces Docker runtime. One Space, one event, one container.
+The deploy target. One Space, one event, one container.
 
-1. Create a new Space (SDK: **Docker**)
-2. Enable **Persistent Storage** — without it the ritual memory is ephemeral and will vanish on restart
-3. Set environment variables from `.env.example`
-4. Push this repository to the Space
-5. Verify: `https://<your-space>.hf.space/api/health`
+1. Create a new Space — SDK: **Docker**.
+2. Enable **Persistent Storage** — without it the event memory is lost on restart.
+3. Set the environment variables from `.env.example` as Space secrets.
+   (`SMTP_HOST=console` prints login codes to the logs if you just want to test.)
+4. Push this repository to the Space.
+5. Verify: `https://<your-space>.hf.space/api/health`.
 
-See [docs/deployment.md](docs/deployment.md) for the full invocation guide.
+HF reads the Space card (`sdk: docker`, `app_port: 7860`) from YAML frontmatter at
+the top of the README. To keep this README clean on GitHub, that card lives in
+`hf-space-header.yml` and the sync workflow prepends it to the README only when
+pushing to the Space. Full guide: [docs/deployment.md](docs/deployment.md).
 
 ---
 
 ## Architecture
 
-One container. One process. One file on disk.
+One container, one process, one SQLite file.
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11+ / FastAPI |
-| Frontend | React / Next.js 14+ (static export, served by FastAPI) |
-| Database | SQLite WAL mode + Alembic migrations |
-| Auth | JWT in HTTP-only cookies — passwordless email magic links |
-| Email | SMTP via aiosmtplib |
-| CLI | Typer + Rich |
-| Container | Docker, single image, port 7860 |
-| Deploy target | Hugging Face Spaces |
-
-The frontend is compiled to static files at build time and served directly by the FastAPI process — no Node.js runtime in production. The database is a single SQLite file at `/data/app.db`. The entire state of the event lives in that file.
+| Backend | Python 3.11 / FastAPI |
+| Frontend | Next.js 14 static export, served by FastAPI |
+| Database | SQLite (WAL) + Alembic |
+| Auth | Passwordless email magic-link → JWT in an HTTP-only cookie |
+| Email | SMTP via aiosmtplib (console mode for dev) |
+| Container | Single Docker image, port 7860 |
 
 ---
 
@@ -149,26 +97,22 @@ The frontend is compiled to static files at build time and served directly by th
 
 | Document | Description |
 |----------|-------------|
-| [docs/architecture.md](docs/architecture.md) | System design, container layout, request flows |
-| [docs/data-model.md](docs/data-model.md) | Entity relationships and database schema |
-| [docs/event-lifecycle.md](docs/event-lifecycle.md) | The Ritual state machine |
-| [docs/api.md](docs/api.md) | REST API reference |
-| [docs/deployment.md](docs/deployment.md) | Deployment (HF Spaces, Docker, local) |
-| [PROGRESS.md](PROGRESS.md) | Implementation status tracker |
-| [CHANGELOG.md](CHANGELOG.md) | Chronicle of changes |
-| [RISKS.md](RISKS.md) | Risk register and wards |
-| [docs/writing-style.md](docs/writing-style.md) | Voice and tone guide for all documentation |
+| [AGENTS.md](AGENTS.md) | Canonical guide — commands, architecture, conventions |
+| [docs/architecture.md](docs/architecture.md) | System design and request flows |
+| [docs/event-lifecycle.md](docs/event-lifecycle.md) | The state machine |
+| [docs/api.md](docs/api.md) | REST reference (interactive at `/api/docs`) |
+| [docs/configuration.md](docs/configuration.md) | Environment-variable reference |
+| [docs/deployment.md](docs/deployment.md) | HF Spaces, Docker, local |
+| [docs/admin-guide.md](docs/admin-guide.md) · [docs/agent-guide.md](docs/agent-guide.md) | Running an event · bot/agent API |
+| [PROGRESS.md](PROGRESS.md) · [CHANGELOG.md](CHANGELOG.md) | Status · changes |
 
 ---
 
-## Current Status
+## Status
 
-| Step | Ritual | Status |
-|------|--------|--------|
-| 01 | Project Setup & Docker | ✓ Complete |
-| 02 | Database Layer | ✓ Complete |
-| 03 | Authentication | ✓ Complete |
-| 04 | User Management | ✓ Complete |
-| 05–12 | Submissions, Scoring, Email, Export… | pending |
+All 20 spec steps are addressed; the backend is feature-complete across MVP-1
+through MVP-4 and the cross-cutting steps, with **284 tests passing**. The Next.js
+app builds as a static export and the participant and keeper's-console flows are
+wired to the live API. See [PROGRESS.md](PROGRESS.md) for the detailed breakdown.
 
-110/110 tests passing.
+Licensed under the [MIT License](LICENSE).

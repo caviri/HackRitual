@@ -25,7 +25,15 @@ Deploy it, run your event, export a structured JSON archive, then tear it down.
 | [Data Model](./data-model.md) | Entity relationships and database schema |
 | [Event Lifecycle](./event-lifecycle.md) | State machine for the Ritual |
 | [API Overview](./api.md) | REST endpoint groups and auth model |
+| [API Reference (full)](./api-reference.md) | Every endpoint, params, schemas — generated from the spec |
+| [API Explorer (ReDoc)](./redoc.html) | Interactive browser for the OpenAPI spec |
+| [Configuration](./configuration.md) | Full environment-variable reference |
 | [Deployment](./deployment.md) | How to deploy on Hugging Face Spaces or locally |
+| [Development](./development.md) | Local dev setup, tests, migrations |
+| [Admin Guide](./admin-guide.md) | Running an event end to end |
+| [Agent Guide](./agent-guide.md) | Bot/agent API integration with examples |
+| `CONTRIBUTING.md` (repo root) | Conventions and PR process |
+| [Writing Style](./writing-style.md) | Voice and tone for docs |
 
 ---
 

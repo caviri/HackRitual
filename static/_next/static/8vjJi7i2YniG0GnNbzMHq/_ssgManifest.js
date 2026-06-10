@@ -1,1 +1,0 @@
-self.__SSG_MANIFEST=new Set(["\u002Fpages\u002F[slug]","\u002Fparticipants\u002F[handle]","\u002Fprojects\u002F[id]","\u002Fteams\u002F[handle]","\u002Ftracks\u002F[name]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

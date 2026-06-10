@@ -1,0 +1,20 @@
+# Build context excludes — keep it small and avoid host symlinks.
+**/node_modules
+**/__pycache__
+*.pyc
+src/frontend/out
+src/frontend/.next
+src/frontend/playwright-report
+src/frontend/test-results
+src/backend/.venv
+.venv
+.git
+.github
+data
+*.db
+*.db-wal
+*.db-shm
+.env
+.dev
+docs/openapi.json
+docs/screenshots

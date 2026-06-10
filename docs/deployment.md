@@ -39,8 +39,11 @@ HF Spaces provides a free Docker runtime with optional persistent storage.
    ```
 
 4. **Deploy**
-   - Push the repository to your HF Space (or use the HF web UI)
-   - HF builds and runs the `docker/Dockerfile`
+   - Push the repository to your HF Space (the `.github/workflows/sync-to-hf.yml`
+     action mirrors GitHub → HF on every push to `main`)
+   - HF builds the `Dockerfile` at the repo root. The sync workflow stages it
+     there from `tools/image/docker/Dockerfile`; the README frontmatter
+     (`sdk: docker`, `app_port: 7860`) tells HF how to run it
    - Port `7860` is exposed automatically
 
 5. **Verify**
@@ -79,7 +82,7 @@ cp .env.example .env
 mkdir -p data
 
 # 4. Build and run
-docker build -f docker/Dockerfile -t hackritual .
+docker build -f tools/image/docker/Dockerfile -t hackritual .
 docker run -p 7860:7860 \
   --env-file .env \
   -v $(pwd)/data:/data \
@@ -97,11 +100,11 @@ curl http://localhost:7860/api/health
 cp .env.example .env
 # Edit .env
 
-docker compose up --build
+docker compose -f tools/image/docker/docker-compose.yml up --build
 ```
 
-The compose file mounts `./backend` for hot-reload.
-Run `cd frontend && npm run dev` separately for frontend hot-reload on port 3000.
+The compose file mounts `src/backend` for hot-reload.
+Run `cd src/frontend && pnpm dev` separately for frontend hot-reload on port 3000.
 
 ---
 
@@ -111,16 +114,18 @@ Useful for development and running tests:
 
 ```bash
 # Install backend deps
-pip install -r backend/requirements-dev.txt
+pip install -r src/backend/requirements-dev.txt
 
 # Copy and fill in .env
 cp .env.example .env
 
 # Run migrations (creates DB at DB_PATH)
-cd backend && alembic upgrade head && cd ..
+cd src/backend && alembic upgrade head
 
-# Start server
-PYTHONPATH=backend uvicorn backend.app.main:app --reload --port 7860
+# Start server (from backend/, where the app's absolute `app.*` imports resolve)
+uvicorn app.main:app --reload --port 7860
+# — or, the friendlier wrapper —
+uv run hackritual serve --reload
 ```
 
 ---
@@ -135,11 +140,13 @@ entrypoint.sh
   ├─ Check /proc/mounts for /data persistence
   │    └─ If tmpfs → log WARNING (ephemeral)
   │
-  ├─ alembic upgrade head
+  ├─ cd /app/backend ; export PYTHONPATH=/app/backend
+  │
+  ├─ alembic --config alembic.ini upgrade head
   │    ├─ Creates app.db if not exists
   │    └─ Applies any pending migrations
   │
-  └─ uvicorn backend.app.main:app --port 7860
+  └─ uvicorn app.main:app --port 7860
        │
        └─ lifespan startup
             ├─ Logging configured (JSON → stdout)
