@@ -2,16 +2,79 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { PageHeader } from '../../../components/page-header';
 import { DitheredImage } from '../../../components/dithered-image';
 import { useStage } from '../../../lib/use-stage';
+import {
+  api,
+  backendPresent,
+  type ParticipantDTO,
+  type ProjectDTO,
+  type TrackDTO,
+} from '../../../lib/api';
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+interface Row {
+  key: string;
+  href: string;
+  idLabel: string;
+  title: string;
+  blurb: string;
+  proposer: string;
+  rank?: number;
+  score?: number;
+  imageSeed: string;
+  imageVariant?: 'sprout' | 'lattice' | 'nucleus' | 'bloom';
+  imageSrc?: string;
+}
 
 export function TrackDetail() {
   const params = useParams();
   const data = useStage();
   const name = String(params?.name ?? '');
-  const track = data.tracks.find((t) => t.name === name);
-  const projects = data.proposals.filter((p) => p.track === name);
+  const [live, setLive] = useState<boolean | null>(null);
+  const [real, setReal] = useState<{
+    tracks: TrackDTO[];
+    projects: ProjectDTO[];
+    participants: ParticipantDTO[];
+  }>({ tracks: [], projects: [], participants: [] });
+
+  useEffect(() => {
+    void backendPresent().then(async (ok) => {
+      if (ok) {
+        const [tracks, projects, participants] = await Promise.all([
+          api.tracks(),
+          api.projects(),
+          api.participants(),
+        ]);
+        setReal({ tracks, projects, participants });
+      }
+      setLive(ok);
+    });
+  }, []);
+
+  // Probe in flight — brief blank rather than a mock (or not-found) flash.
+  if (live === null) return null;
+
+  const useLive = live === true;
+
+  const liveTrack = useLive
+    ? real.tracks.find((t) => t.name === name || slugify(t.name) === name)
+    : undefined;
+  const mockTrack = useLive
+    ? undefined
+    : data.tracks.find((t) => t.name === name);
+
+  const track = useLive
+    ? liveTrack && { name: liveTrack.name, blurb: liveTrack.description ?? '' }
+    : mockTrack && { name: mockTrack.name, blurb: mockTrack.blurb };
 
   if (!track) {
     return (
@@ -29,6 +92,45 @@ export function TrackDetail() {
       </section>
     );
   }
+
+  const projects: Row[] = useLive
+    ? real.projects
+        .filter((p) => p.track_id === liveTrack?.id)
+        .map((p) => ({
+          key: p.id,
+          href: `/project/?id=${p.id}`,
+          idLabel: `#${p.id.slice(0, 6)}`,
+          title: p.title,
+          blurb: (p.description ?? '').split('\n')[0].slice(0, 160),
+          proposer:
+            real.participants.find(
+              (pa) => pa.id === p.proposed_by_participant_id,
+            )?.display_name ?? '?',
+          imageSeed: p.title,
+          imageSrc: p.image ?? undefined,
+        }))
+    : data.proposals
+        .filter((p) => p.track === name)
+        .map((p) => ({
+          key: String(p.id),
+          href: `/projects/${p.id}/`,
+          idLabel: `#${String(p.id).padStart(3, '0')}`,
+          title: p.title,
+          blurb: p.blurb,
+          proposer: p.proposer,
+          rank: p.rank,
+          score: p.score,
+          imageSeed: p.title,
+          imageVariant: p.imageVariant,
+        }));
+
+  const otherTracks: { name: string; href: string }[] = useLive
+    ? real.tracks
+        .filter((t) => t.id !== liveTrack?.id)
+        .map((t) => ({ name: t.name, href: `/tracks/${slugify(t.name)}/` }))
+    : data.tracks
+        .filter((t) => t.name !== name)
+        .map((t) => ({ name: t.name, href: `/tracks/${t.name}/` }));
 
   return (
     <>
@@ -57,13 +159,14 @@ export function TrackDetail() {
         ) : (
           <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
-              <li key={p.id}>
+              <li key={p.key}>
                 <Link
-                  href={`/projects/${p.id}/`}
+                  href={p.href}
                   className="ascii-frame block no-underline group transition-colors hover:border-primary h-full"
                 >
                   <DitheredImage
-                    seed={p.title}
+                    seed={p.imageSeed}
+                    src={p.imageSrc}
                     variant={p.imageVariant ?? 'bloom'}
                     alt={p.title}
                     className="aspect-[4/3] w-full"
@@ -72,7 +175,7 @@ export function TrackDetail() {
                   <div className="p-4">
                     <header className="flex items-baseline justify-between gap-3 mb-1.5">
                       <span className="font-mono text-[0.72rem] text-fg-dim tabular-nums">
-                        {p.rank ? <span className="text-accent">#{p.rank}</span> : `#${String(p.id).padStart(3, '0')}`}
+                        {p.rank ? <span className="text-accent">#{p.rank}</span> : p.idLabel}
                       </span>
                       {p.score && (
                         <span className="font-mono text-[0.7rem] text-accent tabular-nums">
@@ -98,17 +201,15 @@ export function TrackDetail() {
 
         <nav className="mt-12 pt-6 border-t border-rule flex flex-wrap gap-3 font-mono text-[0.72rem] uppercase tracking-widest text-fg-muted">
           <span className="text-fg-dim">other tracks:</span>
-          {data.tracks
-            .filter((t) => t.name !== name)
-            .map((t) => (
-              <Link
-                key={t.name}
-                href={`/tracks/${t.name}/`}
-                className="text-primary hover:underline"
-              >
-                ▸ {t.name}
-              </Link>
-            ))}
+          {otherTracks.map((t) => (
+            <Link
+              key={t.name}
+              href={t.href}
+              className="text-primary hover:underline"
+            >
+              ▸ {t.name}
+            </Link>
+          ))}
         </nav>
       </section>
     </>

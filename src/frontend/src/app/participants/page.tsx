@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../../components/page-header';
 import { DitheredImage } from '../../components/dithered-image';
 import { useStage } from '../../lib/use-stage';
-import { api, type ParticipantDTO } from '../../lib/api';
+import { api, backendPresent, type ParticipantDTO } from '../../lib/api';
 import type { ParticipantMock } from '../../lib/mocks';
 
 type Filter = 'all' | 'human' | 'agent' | 'team';
@@ -34,16 +34,21 @@ interface PRow {
 export default function ParticipantsPage() {
   const data = useStage();
   const [filter, setFilter] = useState<Filter>('all');
-  const [real, setReal] = useState<ParticipantDTO[] | null>(null);
+  const [live, setLive] = useState<boolean | null>(null);
+  const [real, setReal] = useState<ParticipantDTO[]>([]);
 
   useEffect(() => {
-    void api.participants().then((p) => {
-      if (p.length > 0) setReal(p);
+    void backendPresent().then(async (ok) => {
+      if (ok) setReal(await api.participants());
+      setLive(ok);
     });
   }, []);
 
+  // live !== false → API data (even when empty); mocks only when backend absent
+  const useLive = live !== false;
+
   // Build display rows
-  const rows: PRow[] = real
+  const rows: PRow[] = useLive
     ? real.map((p) => ({
         key: p.id,
         href: `/participant/?id=${p.id}`,
@@ -72,8 +77,8 @@ export default function ParticipantsPage() {
   const waitlist = rows.filter((r) => r.waitlist);
   const visible = filter === 'all' ? confirmed : confirmed.filter((r) => r.kind === filter);
 
-  const totalLabel = real
-    ? `${rows.length} live`
+  const totalLabel = useLive
+    ? `${confirmed.length} in · ${waitlist.length} wait · live`
     : `${data.participantCount} in · ${data.waitlistCount} wait`;
 
   const subtitle = {
@@ -113,7 +118,16 @@ export default function ParticipantsPage() {
           ))}
         </div>
 
-        {visible.length === 0 ? (
+        {rows.length === 0 ? (
+          <div className="ascii-frame p-10 text-center">
+            <p className="font-mono text-[0.78rem] text-fg-dim uppercase tracking-widest mb-3">
+              $ participants.list() → []
+            </p>
+            <p className="ritual text-fg-muted text-[1.05rem] max-w-md mx-auto">
+              No one has stepped into the circle yet.
+            </p>
+          </div>
+        ) : visible.length === 0 ? (
           <p className="ritual text-fg-muted">No one matches this filter.</p>
         ) : (
           <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

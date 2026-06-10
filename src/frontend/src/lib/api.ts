@@ -23,8 +23,11 @@ export interface EventDTO {
   title: string;
   type: string;
   state: EventState;
-  start_at: string;
-  end_at: string;
+  // The live API returns start/end; start_at/end_at kept for older callers.
+  start?: string;
+  end?: string;
+  start_at?: string;
+  end_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -389,6 +392,27 @@ export async function requireJson<T>(
     throw new ApiError(res.status, await res.text().catch(() => ''));
   }
   return (await res.json()) as T;
+}
+
+let _backendPresent: Promise<boolean> | null = null;
+
+/** True when a real backend answers /api/health (memoized for the page load).
+ * Pages must render API data — even empty lists — whenever this is true;
+ * the stage mocks are reserved for the backend-less static demo. */
+export function backendPresent(): Promise<boolean> {
+  if (_backendPresent === null) {
+    _backendPresent = fetch(`${BASE}/api/health`, {
+      headers: { accept: 'application/json' },
+      credentials: 'include',
+    })
+      .then(async (res) => {
+        if (!res.ok) return false;
+        const h = (await res.json()) as HealthDTO;
+        return h.db_ok === true && h.event_id !== 'demo';
+      })
+      .catch(() => false);
+  }
+  return _backendPresent;
 }
 
 export class ApiError extends Error {

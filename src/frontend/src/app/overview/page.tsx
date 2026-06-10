@@ -7,6 +7,7 @@ import { DitheredImage } from '../../components/dithered-image';
 import { useStage } from '../../lib/use-stage';
 import {
   api,
+  backendPresent,
   type MeDTO,
   type ProjectDTO,
   type SubmissionDTO,
@@ -26,9 +27,14 @@ const STATUS_TONE: Record<string, string> = {
 
 export default function OverviewPage() {
   const data = useStage();
+  const [live, setLive] = useState<boolean | null>(null);
   const [me, setMe] = useState<MeDTO | null | undefined>(undefined);
   const [myProjects, setMyProjects] = useState<ProjectDTO[]>([]);
   const [mySubs, setMySubs] = useState<SubmissionDTO[]>([]);
+
+  useEffect(() => {
+    void backendPresent().then(setLive);
+  }, []);
 
   useEffect(() => {
     void api.me().then(async (u) => {
@@ -264,6 +270,80 @@ export default function OverviewPage() {
                 {me.role === 'admin' && (
                   <li><Link href="/admin/" className="text-accent hover:text-primary">▸ admin console</Link></li>
                 )}
+              </ul>
+            </div>
+          </aside>
+        </section>
+      </>
+    );
+  }
+
+  // ── LIVE backend, no participant session — never show the mock persona ──
+  if (live !== false) {
+    return (
+      <>
+        <PageHeader
+          prompt="ritual.you()"
+          title="Welcome."
+          subtitle={subtitle}
+        />
+
+        <section className="mx-auto w-full max-w-6xl px-6 py-12 grid gap-8 lg:grid-cols-[1.6fr_1fr]">
+          <div className="space-y-8">
+            <article className="ascii-frame p-8 text-center">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
+                $ auth.me() → null
+              </p>
+              <p className="ritual text-fg-muted text-[1.05rem] max-w-md mx-auto mb-6">
+                {me === undefined
+                  ? 'Consulting the ledger.'
+                  : me
+                    ? 'Your account is signed in, but no participant seat is bound to it yet.'
+                    : 'No session found. Sign in to take your place in the circle.'}
+              </p>
+              <Link href="/signin/" className="btn">
+                sign in →
+              </Link>
+            </article>
+
+            <article className="ascii-frame p-6">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
+                about this ritual
+              </p>
+              <p className="text-fg-muted leading-relaxed text-[1rem] mb-4">
+                One container · one event · one SQLite file. When the ritual
+                ends, the artefact travels with you in a single zip.
+              </p>
+              <Link
+                href="/pages/rites/"
+                className="font-mono text-[0.78rem] text-primary hover:underline"
+              >
+                read the rites in full →
+              </Link>
+            </article>
+          </div>
+
+          <aside className="space-y-6">
+            <div className="ascii-frame p-5">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
+                the ritual now
+              </p>
+              <ul className="font-mono text-[0.82rem] space-y-2">
+                <li>
+                  <span className="text-fg-dim">state    </span>
+                  <span className="text-primary">{data.state}</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="ascii-frame p-5">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
+                quick paths
+              </p>
+              <ul className="space-y-2 font-mono text-[0.85rem]">
+                <li><Link href="/signin/" className="text-primary hover:underline">▸ sign in to claim a participant</Link></li>
+                <li><Link href="/projects/" className="text-fg-muted hover:text-primary">▸ browse projects</Link></li>
+                <li><Link href="/log/" className="text-fg-muted hover:text-primary">▸ the ritual log</Link></li>
               </ul>
             </div>
           </aside>

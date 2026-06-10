@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/page-header';
 import { useStage } from '../../lib/use-stage';
 import {
   api,
+  backendPresent,
   type ParticipantDTO,
   type ProjectDTO,
   type SubmissionDTO,
@@ -37,23 +38,31 @@ interface Row {
 
 export default function SubmissionsPage() {
   const data = useStage();
+  const [live, setLive] = useState<boolean | null>(null);
   const [real, setReal] = useState<{
     subs: SubmissionDTO[];
     projects: ProjectDTO[];
     participants: ParticipantDTO[];
-  } | null>(null);
+  }>({ subs: [], projects: [], participants: [] });
 
   useEffect(() => {
-    void Promise.all([
-      api.submissions(),
-      api.projects(),
-      api.participants(),
-    ]).then(([subs, projects, participants]) => {
-      if (subs.length > 0) setReal({ subs, projects, participants });
+    void backendPresent().then(async (ok) => {
+      if (ok) {
+        const [subs, projects, participants] = await Promise.all([
+          api.submissions(),
+          api.projects(),
+          api.participants(),
+        ]);
+        setReal({ subs, projects, participants });
+      }
+      setLive(ok);
     });
   }, []);
 
-  const rows: (Row & { submissionHref?: string })[] = real
+  // live !== false → API data (even when empty); mocks only when backend absent
+  const useLive = live !== false;
+
+  const rows: (Row & { submissionHref?: string })[] = useLive
     ? real.subs.map((s) => {
         const project = real.projects.find((p) => p.id === s.project_id);
         const participant = real.participants.find(
@@ -97,7 +106,7 @@ export default function SubmissionsPage() {
         prompt="ritual.submissions()"
         title="Submissions"
         subtitle={subtitle}
-        chip={real ? `${rows.length} live` : `${rows.length} versions`}
+        chip={live === true ? `${rows.length} live` : `${rows.length} versions`}
       />
 
       <section className="mx-auto w-full max-w-6xl px-6 py-10">

@@ -7,8 +7,17 @@ import { StatusBadge } from '../components/status-badge';
 import { LiveCountdown } from '../components/live-countdown';
 import { WinnerShowcase } from '../components/winner-showcase';
 import { DitheredImage } from '../components/dithered-image';
-import { api, type AnnouncementDTO } from '../lib/api';
-import type { ImageVariant } from '../lib/mocks';
+import {
+  api,
+  backendPresent,
+  type AnnouncementDTO,
+  type EventDTO,
+  type ParticipantDTO,
+  type PhaseDTO,
+  type ProjectDTO,
+  type TrackDTO,
+} from '../lib/api';
+import type { ImageVariant, ParticipantMock, PhaseMock, ProposalMock, TrackMock } from '../lib/mocks';
 import {
   STATES,
   type EventState,
@@ -59,16 +68,187 @@ const SPECIMEN_BY_STATE: Record<
   ARCHIVED: { seed: 'specimen·dried', variant: 'lattice' },
 };
 
+interface ProposalItem {
+  key: string;
+  idLabel: string;
+  href: string;
+  title: string;
+  blurb: string;
+  proposer: string;
+  track: string;
+  rank?: number;
+  score?: number;
+}
+
+interface LiveView {
+  proposals: ProposalItem[];
+  projectTotal: number;
+  participants: ParticipantMock[];
+  participantCount: number;
+  waitlistCount: number;
+  tracks: TrackMock[];
+  phases: PhaseMock[];
+  winners: ProposalMock[];
+  when: string | null;
+}
+
+const TRACK_GLYPHS = ['◆', '◇', '▰', '✦', '▢'];
+const PHASE_GLYPHS = ['◇', '◆', '▢'];
+
+function fmtDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function buildLiveView(
+  event: EventDTO | null,
+  projects: ProjectDTO[],
+  parts: ParticipantDTO[],
+  tracksDto: TrackDTO[],
+  phasesDto: PhaseDTO[],
+  board: { entries?: { participant: { id: string; display_name: string }; score: number }[] } | null,
+): LiveView {
+  const trackName = (id: string | null) =>
+    tracksDto.find((t) => t.id === id)?.name ?? '—';
+  const proposerName = (id: string) =>
+    parts.find((pa) => pa.id === id)?.display_name ?? '?';
+
+  const byNewest = [...projects].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+  const proposals: ProposalItem[] = byNewest.slice(0, 5).map((p) => ({
+    key: p.id,
+    idLabel: `#${p.id.slice(0, 6)}`,
+    href: `/project/?id=${p.id}`,
+    title: p.title,
+    blurb: (p.description ?? '').split('\n')[0].slice(0, 140),
+    proposer: proposerName(p.proposed_by_participant_id),
+    track: trackName(p.track_id),
+  }));
+
+  const active = parts.filter((pa) => !(pa as { is_waiting?: boolean }).is_waiting);
+  const waiting = parts.length - active.length;
+  const participants: ParticipantMock[] = parts.slice(0, 6).map((pa) => ({
+    handle: pa.display_name,
+    kind: (pa.type === 'team' ? 'team' : pa.type === 'agent' ? 'agent' : 'human') as
+      | 'human'
+      | 'agent'
+      | 'team',
+    meta: (pa as { affiliation?: string | null }).affiliation ?? pa.type,
+    waitlist: Boolean((pa as { is_waiting?: boolean }).is_waiting),
+  }));
+
+  const tracks: TrackMock[] = tracksDto.map((t, i) => ({
+    name: t.name,
+    glyph: TRACK_GLYPHS[i % TRACK_GLYPHS.length],
+    count: projects.filter((p) => p.track_id === t.id).length,
+    blurb: t.description ?? '',
+  }));
+
+  const now = Date.now();
+  const phases: PhaseMock[] = phasesDto.map((ph, i) => {
+    const start = ph.starts_at ? new Date(ph.starts_at).getTime() : null;
+    const end = ph.ends_at ? new Date(ph.ends_at).getTime() : null;
+    const status: PhaseMock['status'] =
+      end !== null && now > end
+        ? 'completed'
+        : start !== null && now >= start
+          ? 'active'
+          : 'upcoming';
+    return {
+      name: ph.name,
+      glyph: PHASE_GLYPHS[i % PHASE_GLYPHS.length],
+      range:
+        ph.starts_at && ph.ends_at
+          ? `${fmtDay(ph.starts_at)} – ${fmtDay(ph.ends_at)}`
+          : 'unscheduled',
+      epigraph: ph.description ?? '',
+      status,
+    };
+  });
+
+  const winners: ProposalMock[] = (board?.entries ?? []).slice(0, 3).map((row, i) => {
+    const project = projects.find(
+      (p) => p.proposed_by_participant_id === row.participant.id,
+    );
+    return {
+      id: i + 1,
+      title: project?.title ?? row.participant.display_name,
+      track: trackName(project?.track_id ?? null),
+      blurb: (project?.description ?? '').split('\n')[0].slice(0, 140),
+      proposer: row.participant.display_name,
+      rank: i + 1,
+      score: row.score,
+    };
+  });
+
+  const when =
+    event && event.start && event.end
+      ? `${fmtDay(event.start)} – ${fmtDay(event.end)}, ${new Date(event.end).getFullYear()}`
+      : null;
+
+  return {
+    proposals,
+    projectTotal: projects.length,
+    participants,
+    participantCount: active.length,
+    waitlistCount: waiting,
+    tracks,
+    phases,
+    winners,
+    when,
+  };
+}
+
 export default function HomePage() {
   const [data, setData] = useState<StageData>(getStageData('OPEN'));
   const [announcements, setAnnouncements] = useState<AnnouncementDTO[]>([]);
+  const [liveView, setLiveView] = useState<LiveView | null>(null);
 
   useEffect(() => {
     setData(getStageData(parseStageFromUrl(window.location.search)));
     void api.announcements().then(setAnnouncements);
+    void backendPresent().then(async (present) => {
+      if (!present) return;
+      const [event, projects, parts, tracksDto, phasesDto, board] = await Promise.all([
+        api.event(),
+        api.projects(),
+        api.participants(),
+        api.tracks(),
+        api.phases(),
+        api.leaderboard(),
+      ]);
+      setLiveView(buildLiveView(event, projects, parts, tracksDto, phasesDto, board));
+    });
   }, []);
 
-  const { state, hero, phases, proposals, participants, tracks, winners } = data;
+  const { state, hero } = data;
+  // Live content wins whenever a backend answered; the stage mocks only
+  // carry the copy (hero text, headings) and the backend-less demo.
+  const phases = liveView?.phases ?? data.phases;
+  const participants = liveView?.participants ?? data.participants;
+  const tracks = liveView?.tracks ?? data.tracks;
+  const winners = liveView
+    ? state === 'FINAL' || state === 'ARCHIVED'
+      ? liveView.winners
+      : []
+    : data.winners;
+  const proposalItems: ProposalItem[] = liveView
+    ? liveView.proposals
+    : data.proposals.map((p) => ({
+        key: String(p.id),
+        idLabel: String(p.id).padStart(3, '0'),
+        href: `/projects/${p.id}/`,
+        title: p.title,
+        blurb: p.blurb,
+        proposer: p.proposer,
+        track: p.track,
+        rank: p.rank,
+        score: p.score,
+      }));
+  const participantCount = liveView?.participantCount ?? data.participantCount;
+  const waitlistCount = liveView?.waitlistCount ?? data.waitlistCount;
+  const whenLine = liveView?.when ?? 'May 14 – May 16, 2026';
+  const seeAll = liveView
+    ? { label: `see all ${liveView.projectTotal} →`, href: '/projects/' }
+    : data.proposalsSeeAll;
 
   const heroAccent = TITLE_ACCENT_CLASS[hero.titleAccent];
 
@@ -117,7 +297,7 @@ export default function HomePage() {
           <div className="space-y-3 font-mono text-[0.85rem] text-fg-muted mb-10">
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-fg-dim">when</span>
-              <span className="text-fg">May 14 – May 16, 2026</span>
+              <span className="text-fg">{whenLine}</span>
               <span className="text-fg-dim">/</span>
               <span className="text-fg-dim">where</span>
               <span className="text-fg">a single container, anywhere</span>
@@ -298,33 +478,33 @@ export default function HomePage() {
                 {data.proposalsHeading}
               </h2>
               <Link
-                href={data.proposalsSeeAll.href}
+                href={seeAll.href}
                 className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-muted hover:text-primary"
               >
-                {data.proposalsSeeAll.label}
+                {seeAll.label}
               </Link>
             </div>
-            {proposals.length === 0 ? (
+            {proposalItems.length === 0 ? (
               <p className="ritual text-fg-muted text-[1rem] leading-relaxed">
                 Nothing has been forged yet. The seeds wait for the appointed hour.
               </p>
             ) : (
               <ol className="font-mono text-[0.85rem]">
-                {proposals.map((p) => (
+                {proposalItems.map((p) => (
                   <li
-                    key={p.id}
+                    key={p.key}
                     className="grid grid-cols-[auto_1fr_auto] items-baseline gap-x-4 py-4 border-t border-rule first:border-t-0 group"
                   >
                     <span className="text-fg-dim tabular-nums">
                       {p.rank ? (
                         <span className="text-accent">#{p.rank}</span>
                       ) : (
-                        String(p.id).padStart(3, '0')
+                        p.idLabel
                       )}
                     </span>
                     <div>
                       <Link
-                        href={`/projects/${p.id}/`}
+                        href={p.href}
                         className="text-fg group-hover:text-primary transition-colors"
                       >
                         {p.title}
@@ -361,7 +541,7 @@ export default function HomePage() {
                 href="/participants/"
                 className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-muted hover:text-primary"
               >
-                see all {data.participantCount} →
+                see all {participantCount} →
               </Link>
             </div>
             {participants.length === 0 ? (
@@ -394,9 +574,9 @@ export default function HomePage() {
                 ))}
               </ul>
             )}
-            {data.waitlistCount > 0 && (
+            {waitlistCount > 0 && (
               <p className="mt-4 font-mono text-[0.72rem] text-fg-dim uppercase tracking-widest">
-                waitlist <span className="text-warm">{data.waitlistCount} pending</span>
+                waitlist <span className="text-warm">{waitlistCount} pending</span>
               </p>
             )}
           </div>

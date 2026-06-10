@@ -266,3 +266,26 @@ def test_seed_profile_draft_yields_no_submissions(_create_tables):
 
     assert FULL_PROFILE.include_projects is True
     assert FULL_PROFILE.include_scores is True
+
+
+def test_stage_chronicle_in_audit_log(demo_mode):
+    from app.database import get_sessionmaker
+    from app.models.audit_log import AuditLog
+
+    with get_sessionmaker("DRAFT")() as db:
+        actions = {a.action for a in db.query(AuditLog).all()}
+        assert "event.created" in actions
+        assert "event.transition" not in actions  # the gates have not opened
+
+    with get_sessionmaker("FROZEN")() as db:
+        rows = db.query(AuditLog).order_by(AuditLog.created_at).all()
+        actions = [a.action for a in rows]
+        assert "event.transition" in actions
+        assert "score.rendered" in actions
+        # cumulative: FROZEN carries OPEN's history too
+        assert "project.proposed" in actions
+
+    with get_sessionmaker("ARCHIVED")() as db:
+        actions = {a.action for a in db.query(AuditLog).all()}
+        assert "export.sealed" in actions
+        assert "verdict.inscribed" in actions
