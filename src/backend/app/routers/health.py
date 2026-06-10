@@ -47,6 +47,7 @@ class HealthResponse(BaseModel):
     event_state: str
     persistent_storage: bool
     db_ok: bool
+    demo_stages: bool = False
 
 
 def _check_persistent_storage(data_dir: str) -> bool:
@@ -149,14 +150,16 @@ async def health() -> HealthResponse:
             "Enable persistent storage at /data to avoid data loss."
         )
 
-    # Read event_state from DB (Step 02+). Fall back to "DRAFT" if not seeded yet.
+    # Read event_state from DB (Step 02+). Fall back to "DRAFT" if not seeded
+    # yet. Routed: inside a demo stage the state comes from that snapshot,
+    # while db_ok/persistent_storage keep describing the primary database.
     event_state = "DRAFT"
     if db_ok:
         try:
-            from app.database import SessionLocal
+            from app.database import active_demo_stage, get_sessionmaker
             from app.models.event import Event
 
-            with SessionLocal() as db:
+            with get_sessionmaker(active_demo_stage.get())() as db:
                 ev = db.get(Event, settings.event_id)
                 if ev is not None:
                     event_state = ev.state
@@ -168,6 +171,7 @@ async def health() -> HealthResponse:
         version=settings.app_version,
         event_id=settings.event_id,
         event_state=event_state,
+        demo_stages=settings.demo_stages,
         persistent_storage=persistent,
         db_ok=db_ok,
     )

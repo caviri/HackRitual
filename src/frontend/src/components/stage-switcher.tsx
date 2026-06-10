@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { STATES, EventState, parseStageFromUrl } from '../lib/mocks';
+import { api } from '../lib/api';
 
 const GLYPH: Record<EventState, string> = {
   DRAFT: '▒',
@@ -11,23 +12,64 @@ const GLYPH: Record<EventState, string> = {
   ARCHIVED: '▢',
 };
 
+function readStageCookie(): EventState | null {
+  for (const part of document.cookie.split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === 'demo_stage' && (STATES as string[]).includes(v?.toUpperCase())) {
+      return v.toUpperCase() as EventState;
+    }
+  }
+  return null;
+}
+
 /**
- * Demo-mode bar pinned to the top of every page during the proposal phase.
- * Flips the ?stage= query param and reloads — keeps the URL shareable, so
- * any stage screenshot or tunnel link is reproducible.
+ * Demo bar pinned to the top of every page.
+ *
+ * Shows in two situations:
+ * - no live backend (pure-mock demo) — flips ?stage= and the mock datasets;
+ * - DEMO_STAGES=true on the backend — flips the demo_stage cookie too, so
+ *   every API call routes to that stage's own SQLite snapshot.
  */
 export function StageSwitcher() {
   const [current, setCurrent] = useState<EventState>('OPEN');
+  // null = probing; 'mock' = no backend; 'live-stages' = DEMO_STAGES backend;
+  // 'hidden' = live single-DB backend.
+  const [mode, setMode] = useState<'mock' | 'live-stages' | 'hidden' | null>(null);
 
   useEffect(() => {
-    setCurrent(parseStageFromUrl(window.location.search));
+    const urlStage = /[?&]stage=/.test(window.location.search)
+      ? parseStageFromUrl(window.location.search)
+      : null;
+    setCurrent(urlStage ?? readStageCookie() ?? 'OPEN');
+
+    void api.health().then((h) => {
+      if (h.demo_stages) setMode('live-stages');
+      else if (h.event_id === 'demo' || !h.db_ok) setMode('mock');
+      else setMode('hidden');
+    });
   }, []);
 
   function go(s: EventState) {
+    document.cookie = `demo_stage=${s}; path=/; max-age=31536000; samesite=lax`;
     const url = new URL(window.location.href);
     url.searchParams.set('stage', s);
     window.location.href = url.toString();
   }
+
+  function goLive() {
+    document.cookie = 'demo_stage=; path=/; max-age=0';
+    const url = new URL(window.location.href);
+    url.searchParams.delete('stage');
+    // The stage hook pins ?stage= in sessionStorage — clear it too.
+    try {
+      sessionStorage.clear();
+    } catch {
+      /* ignore */
+    }
+    window.location.href = url.toString();
+  }
+
+  if (mode === null || mode === 'hidden') return null;
 
   return (
     <div className="bg-bg-elev border-b border-rule text-[0.68rem]">
@@ -54,9 +96,21 @@ export function StageSwitcher() {
             </button>
           );
         })}
+        {mode === 'live-stages' && (
+          <button
+            type="button"
+            onClick={goLive}
+            className="font-mono uppercase tracking-widest px-2 py-0.5 border border-transparent text-fg-muted hover:text-fg hover:border-rule-bright"
+            title="leave the demo stages — back to the live event"
+          >
+            ✕ live
+          </button>
+        )}
         <span className="flex-1" />
         <span className="hidden md:inline ritual text-fg-muted normal-case text-[0.85rem]">
-          five states, one container.
+          {mode === 'live-stages'
+            ? 'five states, five small worlds.'
+            : 'five states, one container.'}
         </span>
       </div>
     </div>

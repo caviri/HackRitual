@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -404,7 +405,60 @@ def _submission_data() -> list[dict]:
     ]
 
 
-def seed_fixtures(db: Session) -> dict[str, int]:
+@dataclass(frozen=True)
+class SeedProfile:
+    """What slice of the demo fixtures to seed — used by the multi-stage demo
+    snapshots (a DRAFT snapshot has no projects yet, OPEN has no scores...)."""
+
+    include_projects: bool = True
+    submission_statuses: frozenset = frozenset({"draft", "final", "withdrawn"})
+    include_scores: bool = True
+    force_waiting: bool = False
+
+
+FULL_PROFILE = SeedProfile()
+
+
+def seed_admin_users(db: Session) -> None:
+    """Create/promote ADMIN_SEED_EMAILS. The first seed email is the primary
+    admin: its access password is re-synced to ADMIN_PASSWORD on every call
+    (the lockout recovery path). Others get a generated password once.
+    Flushes; the caller owns the transaction."""
+    import logging
+
+    from app.services.audit import log_action
+    from app.services.passwords import generate_unique_password
+
+    logger = logging.getLogger(__name__)
+    primary_email = settings.admin_seed_email_list[0]
+    for email in settings.admin_seed_email_list:
+        existing = db.query(User).filter_by(email=email).first()
+        if existing is None:
+            existing = User(email=email, role="admin")
+            db.add(existing)
+            db.flush()
+            log_action(db, "user.admin_seeded", target_type="user", target_id=existing.id,
+                       metadata={"method": "seed_emails"})
+            logger.info("Admin user seeded", extra={"email": email})
+        elif existing.role != "admin":
+            existing.role = "admin"
+            log_action(db, "user.role_changed", target_type="user", target_id=existing.id,
+                       metadata={"old_role": existing.role, "new_role": "admin", "method": "seed_emails"})
+            logger.info("Existing user promoted to admin", extra={"email": email})
+
+        if email == primary_email:
+            if existing.access_password != settings.admin_password:
+                existing.access_password = settings.admin_password
+                logger.info("Primary admin password synced from ADMIN_PASSWORD",
+                            extra={"email": email})
+        elif not existing.access_password:
+            existing.access_password = generate_unique_password(db)
+            logger.info("Generated access password for seeded admin",
+                        extra={"email": email})
+    db.flush()
+
+
+def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str, int]:
     """Idempotently insert fixture rows. Returns a count summary."""
     counts: dict[str, int] = {
         "tracks_created": 0,
@@ -510,7 +564,7 @@ def seed_fixtures(db: Session) -> dict[str, int]:
             type=p["type"],
             display_name=p["display_name"],
             affiliation=p["affiliation"],
-            is_waiting=p["is_waiting"],
+            is_waiting=p["is_waiting"] or profile.force_waiting,
             status="active",
         )
         db.add(row)
@@ -522,7 +576,7 @@ def seed_fixtures(db: Session) -> dict[str, int]:
 
     # ── Projects ──
     project_by_title: dict[str, Project] = {}
-    for proj in _project_data():
+    for proj in _project_data() if profile.include_projects else []:
         existing = (
             db.query(Project)
             .filter(Project.event_id == event_id, Project.title == proj["title"])
@@ -554,6 +608,8 @@ def seed_fixtures(db: Session) -> dict[str, int]:
     # enrichment passes below can fill them in)
     submission_by_key: dict[tuple[str, int], Submission] = {}
     for s in _submission_data():
+        if s["status"] not in profile.submission_statuses:
+            continue
         project = project_by_title.get(s["project"])
         team_participant = participant_by_name.get(s["team"])
         if not project or not team_participant:
@@ -752,7 +808,7 @@ def seed_fixtures(db: Session) -> dict[str, int]:
     from app.services.scoring_service import score_submission
 
     scorer = DefaultScorer()
-    for title, version in _SCORED_FINALS:
+    for title, version in _SCORED_FINALS if profile.include_scores else []:
         submission = submission_by_key.get((title, version))
         if submission is None:
             continue

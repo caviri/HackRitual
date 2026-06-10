@@ -9,15 +9,17 @@ can also be served to the browser for unofficial client-side preview.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import (
     APIRouter,
     Depends,
-    File as FastAPIFile,
     HTTPException,
     UploadFile,
     status,
+)
+from fastapi import (
+    File as FastAPIFile,
 )
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -25,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.middleware.auth import require_admin
+from app.middleware.demo_stage import require_primary_db
 from app.models.submission import Submission
 from app.models.user import User
 from app.services import task_queue, wasm_store
@@ -87,7 +90,7 @@ async def upload_wasm(
         "version": version,
         "path": f"{sha}.wasm",
         "size_bytes": len(data),
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": datetime.now(UTC).isoformat(),
         "time_limit_ms": settings.wasm_time_limit_ms,
         "memory_limit_mb": settings.wasm_memory_limit_mb,
     }
@@ -144,6 +147,7 @@ def scorer_info(
 def rescore_all(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
+    _primary: None = Depends(require_primary_db),
 ) -> dict:
     """Queue a re-score for every non-withdrawn submission (via the task queue)."""
     subs = (

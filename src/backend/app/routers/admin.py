@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -11,7 +9,6 @@ from app.database import get_db
 from app.middleware.auth import require_admin
 from app.models.user import User
 from app.services import admin_console, seeder
-
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -26,6 +23,37 @@ def seed_demo_data(
     Safe to call repeatedly — only inserts rows that don't already exist.
     """
     return seeder.seed_fixtures(db)
+
+
+@router.post("/demo/rebuild")
+def rebuild_demo_stages(
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> dict:
+    """Raze and regrow all five demo stage snapshots (DEMO_STAGES=true only).
+
+    Works from inside any stage sandbox — the keeper is seeded everywhere.
+    """
+    from fastapi import HTTPException, status
+
+    from app.config import settings
+    from app.services.audit import log_action
+    from app.services.demo_stages import build_all
+
+    if not settings.demo_stages:
+        raise HTTPException(status.HTTP_409_CONFLICT, "DEMO_STAGES is not enabled")
+    rebuilt = build_all(force=True)
+
+    # Audit on the PRIMARY trail: the rebuild may have erased the very stage
+    # DB this request authenticated against, so the actor's row id is gone —
+    # record the email instead.
+    from app.database import SessionLocal
+
+    with SessionLocal() as primary:
+        log_action(primary, "demo.rebuilt", actor_id=None,
+                   metadata={"stages": sorted(rebuilt), "by": admin.email})
+        primary.commit()
+    return {"rebuilt": rebuilt}
 
 
 # ─── Console aggregations (Step 09) ──────────────────────────────────────────
@@ -51,9 +79,9 @@ def admin_scoring_status(
 
 @router.get("/audit")
 def admin_audit(
-    action: Optional[str] = Query(None),
-    actor: Optional[str] = Query(None),
-    since_hours: Optional[int] = Query(None, ge=1),
+    action: str | None = Query(None),
+    actor: str | None = Query(None),
+    since_hours: int | None = Query(None, ge=1),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
