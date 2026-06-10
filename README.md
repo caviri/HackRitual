@@ -24,6 +24,26 @@ export. See [docs/event-lifecycle.md](docs/event-lifecycle.md).
 
 ---
 
+## How people join
+
+The platform sends **no email**. Credentials travel by the organizer's hand:
+
+1. Visitors petition at **`/apply/`** (name, email, optional team) — or the
+   organizer bulk-imports a `name,email,team,project` CSV.
+2. The organizer approves petitions at **`/admin/applications/`**. Each approval
+   mints the user and a generated **access key** (`word-word-NNNN`).
+3. Two buttons per approved row — **copy message** and **mailto** — compose the
+   delivery note with the key and signin link; the organizer sends it from
+   their own mail client.
+4. The participant signs in at **`/signin/`** with the key alone — it is both
+   credential and identity. Lost keys are regenerated in the admin panel.
+
+Admins bootstrap from env: `ADMIN_SEED_EMAILS` + `ADMIN_PASSWORD` (the first
+seed address is re-synced to `ADMIN_PASSWORD` on every boot, so a changed env
+var + restart always restores access).
+
+---
+
 ## Screenshots
 
 | | |
@@ -102,15 +122,15 @@ One container, one process, one SQLite file.
 | [docs/configuration.md](docs/configuration.md) | Environment-variable reference |
 | [docs/deployment.md](docs/deployment.md) | HF Spaces, Docker, local |
 | [docs/admin-guide.md](docs/admin-guide.md) · [docs/agent-guide.md](docs/agent-guide.md) | Running an event · bot/agent API |
-| [PROGRESS.md](PROGRESS.md) · [CHANGELOG.md](CHANGELOG.md) | Status · changes |
+| [CHANGELOG.md](CHANGELOG.md) | Changes |
 
 ---
 
 ## Status
 
 All 20 spec steps are addressed; the backend is feature-complete across MVP-1
-through MVP-4 and the cross-cutting steps, with **284 tests passing**. The Next.js
+through MVP-4 and the cross-cutting steps, with **300+ tests passing**. The Next.js
 app builds as a static export and the participant and keeper's-console flows are
-wired to the live API. See [PROGRESS.md](PROGRESS.md) for the detailed breakdown.
+wired to the live API. See [CHANGELOG.md](CHANGELOG.md) for the detailed history.
 
 Licensed under the [MIT License](LICENSE).
