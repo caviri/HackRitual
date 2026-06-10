@@ -5,6 +5,7 @@ GET    /api/admin/users            — list all users (paginated, filterable)
 GET    /api/admin/users/{id}       — get single user
 PATCH  /api/admin/users/{id}/role  — change role
 POST   /api/admin/users/{id}/regenerate-password — mint a fresh access password
+POST   /api/admin/users/import-csv — bulk-create users from a CSV
 DELETE /api/admin/users/{id}       — deactivate (soft-delete)
 """
 
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -174,3 +175,36 @@ def regenerate_password(
     db.commit()
     db.refresh(user)
     return UserDetail.model_validate(user)
+
+
+# ------------------------------------------------------------------ #
+# POST /api/admin/users/import-csv
+# ------------------------------------------------------------------ #
+
+@router.post("/import-csv")
+async def import_users_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+) -> dict:
+    """Bulk-create approved users (with access passwords) from a CSV.
+
+    Header: ``name,email,team,project`` (team/project optional). Rows sharing
+    a team value are gathered into a team participant. Duplicates are skipped
+    and reported; bad rows are collected as errors without aborting.
+    """
+    from app.config import settings
+    from app.services.csv_import import CsvFormatError, import_csv
+
+    raw = await file.read()
+    try:
+        report = import_csv(db, raw, admin_id=admin.id, event_id=settings.event_id)
+    except CsvFormatError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+    return {
+        "created": report.created,
+        "skipped": report.skipped,
+        "errors": report.errors,
+    }
