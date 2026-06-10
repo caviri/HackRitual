@@ -340,6 +340,15 @@ export interface CsvImportResultDTO {
   errors: { row: number; reason: string }[];
 }
 
+export interface AnnouncementDTO {
+  id: string;
+  title: string;
+  body: string;
+  visible: boolean;
+  created_at: string;
+  modified_at: string;
+}
+
 export interface AdminUserDTO {
   id: string;
   email: string;
@@ -466,6 +475,38 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
     }),
+
+  // ── announcements (dispatches under the hero)
+  announcements: () =>
+    fetchJson<AnnouncementDTO[]>('/api/announcements', []),
+
+  adminAnnouncements: () =>
+    requireJson<AnnouncementDTO[]>('/api/admin/announcements'),
+
+  createAnnouncement: (input: { title: string; body: string; visible?: boolean }) =>
+    requireJson<AnnouncementDTO>('/api/admin/announcements', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  updateAnnouncement: (
+    id: string,
+    input: { title?: string; body?: string; visible?: boolean },
+  ) =>
+    requireJson<AnnouncementDTO>(`/api/admin/announcements/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  deleteAnnouncement: async (id: string) => {
+    const res = await fetch(`/api/admin/announcements/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
 
   adminApplications: (status?: ApplicationStatus) =>
     requireJson<ApplicationListDTO>(

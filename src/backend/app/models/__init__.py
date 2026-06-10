@@ -3,6 +3,7 @@
 # 2. Any module doing `from app.models import *` gets the full set
 
 from app.models.agent import Agent
+from app.models.announcement import Announcement
 from app.models.application import Application
 from app.models.audit_log import AuditLog
 from app.models.event import Event
@@ -23,6 +24,7 @@ from app.models.user import User
 
 __all__ = [
     "Agent",
+    "Announcement",
     "Application",
     "AuditLog",
     "Event",

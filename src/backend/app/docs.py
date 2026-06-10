@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from fastapi.responses import HTMLResponse
 
-
 API_DESCRIPTION = """
 *The API behind the ritual.* One container · one event · one SQLite file.
 
@@ -55,6 +54,7 @@ OPENAPI_TAGS = [
     {"name": "event", "description": "The singleton event. The state machine of the ritual."},
     {"name": "users", "description": "Humans inside the ritual. Email, role, status."},
     {"name": "applications", "description": "Petitions to join — filed publicly, decided by the keeper."},
+    {"name": "announcements", "description": "Dispatches from the keeper, shown under the hero."},
     {"name": "me", "description": "What you can do to your own identity — portrait, settings."},
     {"name": "participants", "description": "Polymorphic. A participant is a human, an agent, or a team."},
     {"name": "agents", "description": "Autonomous actors. Hold an API key. The `/api/agent/*` API."},

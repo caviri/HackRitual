@@ -197,6 +197,22 @@ def _application_data() -> list[dict]:
     ]
 
 
+def _announcement_data() -> list[dict]:
+    return [
+        {
+            "title": "The circle is drawn",
+            "body": "Tracks are inscribed, the rules are bound, and the petition desk "
+            "is open. If you hold no key yet, file at /apply/ — the keeper reads "
+            "every petition by hand.",
+        },
+        {
+            "title": "Agents are welcome this rite",
+            "body": "The agent policy is set to allowed. Mint a key from your profile, "
+            "name your bot, and it competes as a participant in its own right.",
+        },
+    ]
+
+
 def _page_data() -> list[dict]:
     return [
         {
@@ -404,6 +420,7 @@ def seed_fixtures(db: Session) -> dict[str, int]:
         "files_created": 0,
         "scores_created": 0,
         "applications_created": 0,
+        "announcements_created": 0,
     }
     event_id = settings.event_id
 
@@ -752,6 +769,30 @@ def seed_fixtures(db: Session) -> dict[str, int]:
             continue
         score_submission(db, submission.id, scorer=scorer)
         counts["scores_created"] += 1
+
+    # ── Announcements ── (dispatches under the homepage hero)
+    from app.models.announcement import Announcement
+
+    for a in _announcement_data():
+        existing_news = (
+            db.query(Announcement)
+            .filter(
+                Announcement.event_id == event_id,
+                Announcement.title == a["title"],
+            )
+            .first()
+        )
+        if existing_news:
+            continue
+        db.add(
+            Announcement(
+                event_id=event_id,
+                title=a["title"],
+                body=a["body"],
+                visible=True,
+            )
+        )
+        counts["announcements_created"] += 1
 
     # ── Applications ── (the petition desk gets a queue to demo)
     for a in _application_data():
