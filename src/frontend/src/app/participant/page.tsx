@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../../components/page-header';
 import { DitheredImage } from '../../components/dithered-image';
 import { EvolutionStream } from '../../components/evolution-stream';
-import { fetchJson, type ParticipantDTO } from '../../lib/api';
+import { fetchJson, type ParticipantDetailDTO } from '../../lib/api';
 
 const KIND_CLASS: Record<string, string> = {
   human: 'text-fg-muted',
@@ -21,7 +21,7 @@ const VARIANT_FOR: Record<string, 'sprout' | 'lattice' | 'nucleus'> = {
 
 export default function ParticipantByQueryPage() {
   const [id, setId] = useState<string | null>(null);
-  const [p, setP] = useState<ParticipantDTO | null | undefined>(undefined);
+  const [p, setP] = useState<ParticipantDetailDTO | null | undefined>(undefined);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -31,7 +31,7 @@ export default function ParticipantByQueryPage() {
       setP(null);
       return;
     }
-    void fetchJson<ParticipantDTO | null>(`/api/participants/${qid}`, null).then(setP);
+    void fetchJson<ParticipantDetailDTO | null>(`/api/participants/${qid}`, null).then(setP);
   }, []);
 
   if (p === undefined) {
@@ -74,6 +74,7 @@ export default function ParticipantByQueryPage() {
         <aside className="space-y-6">
           <DitheredImage
             seed={p.display_name}
+            src={p.image ?? undefined}
             variant={VARIANT_FOR[p.type] ?? 'sprout'}
             alt={p.display_name}
             className="aspect-square w-full"
@@ -109,6 +110,89 @@ export default function ParticipantByQueryPage() {
         </aside>
 
         <div className="space-y-8">
+          {(p.teams.length > 0 || p.projects.length > 0 || p.members.length > 0) && (
+            <div className="ascii-frame p-5">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-4">
+                bound to
+              </p>
+
+              {p.members.length > 0 && (
+                <div className="mb-5">
+                  <p className="font-mono text-[0.68rem] uppercase tracking-widest text-fg-dim mb-2">
+                    the roster
+                  </p>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {p.members.map((m) => (
+                      <li
+                        key={m.display_name}
+                        className="font-mono text-[0.72rem] uppercase tracking-wider border border-rule px-2 py-0.5 text-fg-muted"
+                      >
+                        <span aria-hidden className="mr-1">
+                          {m.role_in_team === 'captain' ? '◆' : '·'}
+                        </span>
+                        {m.display_name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {p.teams.length > 0 && (
+                <div className="mb-5">
+                  <p className="font-mono text-[0.68rem] uppercase tracking-widest text-fg-dim mb-2">
+                    teams
+                  </p>
+                  <ul className="space-y-1.5 font-mono text-[0.85rem]">
+                    {p.teams.map((t) => (
+                      <li key={t.id}>
+                        <Link
+                          href={`/team/?id=${t.id}`}
+                          className="text-fg hover:text-primary transition-colors"
+                        >
+                          ▸ {t.display_name}
+                        </Link>
+                        <span className="text-fg-dim text-[0.72rem] uppercase tracking-wider ml-2">
+                          [{t.role_in_team}]
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {p.projects.length > 0 && (
+                <div>
+                  <p className="font-mono text-[0.68rem] uppercase tracking-widest text-fg-dim mb-2">
+                    projects
+                  </p>
+                  <ul className="space-y-1.5 font-mono text-[0.85rem]">
+                    {p.projects.map((pr) => (
+                      <li key={pr.id}>
+                        <Link
+                          href={`/project/?id=${pr.id}`}
+                          className="text-fg hover:text-primary transition-colors"
+                        >
+                          ▸ {pr.title}
+                        </Link>
+                        <span
+                          className={`text-[0.72rem] uppercase tracking-wider ml-2 ${
+                            pr.status === 'approved'
+                              ? 'text-primary'
+                              : pr.status === 'rejected'
+                                ? 'text-danger'
+                                : 'text-warm'
+                          }`}
+                        >
+                          [{pr.status}]
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           <EvolutionStream participantId={p.id} />
         </div>
       </section>

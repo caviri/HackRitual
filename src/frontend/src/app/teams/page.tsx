@@ -22,6 +22,7 @@ interface TeamRow {
   project?: string;
   trackHint?: string;
   imageSeed: string;
+  imageSrc?: string;
   imageVariant: 'nucleus' | 'sprout' | 'lattice' | 'bloom';
 }
 
@@ -74,6 +75,7 @@ export default function TeamsPage() {
           project: project?.title,
           trackHint: track,
           imageSeed: t.display_name,
+          imageSrc: t.image ?? undefined,
           imageVariant: 'nucleus' as const,
         };
       })
@@ -134,6 +136,7 @@ export default function TeamsPage() {
                 >
                   <DitheredImage
                     seed={t.imageSeed}
+                    src={t.imageSrc}
                     variant={t.imageVariant}
                     alt={`${t.name} crest`}
                     className="aspect-[3/2] w-full"

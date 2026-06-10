@@ -93,6 +93,7 @@ export interface SubmissionDTO {
 }
 
 export interface ParticipantDTO {
+  image?: string | null;
   id: string;
   event_id: string;
   type: 'human' | 'agent' | 'team';
@@ -353,12 +354,32 @@ export interface AnnouncementDTO {
   modified_at: string;
 }
 
+export interface RelatedProjectDTO {
+  id: string;
+  title: string;
+  status: string;
+  track_id: string | null;
+}
+
+export interface RelatedTeamDTO {
+  id: string;
+  display_name: string;
+  role_in_team: string;
+}
+
+export interface ParticipantDetailDTO extends ParticipantDTO {
+  projects: RelatedProjectDTO[];
+  teams: RelatedTeamDTO[];
+  members: TeamMemberDTO[];
+}
+
 export interface TeamMemberDTO {
   display_name: string;
   role_in_team: string;
 }
 
 export interface TeamDTO {
+  image?: string | null;
   id: string;
   event_id: string;
   type: string;

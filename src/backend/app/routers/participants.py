@@ -10,12 +10,14 @@ from app.models.participant_member import ParticipantMember
 from app.models.user import User
 from app.schemas.participants import (
     ParticipantCreate,
+    ParticipantDetailResponse,
     ParticipantListResponse,
     ParticipantMemberInfo,
-    ParticipantPublicResponse,
     ParticipantResponse,
     ParticipantStatusUpdate,
     ParticipantUpdate,
+    RelatedProject,
+    RelatedTeam,
     TeamCreate,
     TeamMemberPublic,
     TeamPublicResponse,
@@ -150,17 +152,76 @@ def update_own_participant(
     return updated
 
 
-@router.get("/participants/{participant_id}", response_model=ParticipantPublicResponse)
+@router.get("/participants/{participant_id}", response_model=ParticipantDetailResponse)
 def get_participant(
     participant_id: str,
     db: Session = Depends(get_db),
 ):
-    """Get public info for any participant."""
+    """Public detail for any participant, with what it is bound to: proposed
+    projects, the teams its people belong to, and (for teams) the roster."""
+    from app.models.participant import Participant
+    from app.models.participant_member import ParticipantMember
+    from app.models.project import Project
+    from app.models.user import User
+
     participant = get_participant_by_id(db, participant_id)
     if not participant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Participant not found")
-    
-    return participant
+
+    response = ParticipantDetailResponse.model_validate(participant)
+
+    response.projects = [
+        RelatedProject(id=p.id, title=p.title, status=p.status, track_id=p.track_id)
+        for p in (
+            db.query(Project)
+            .filter(Project.proposed_by_participant_id == participant.id)
+            .order_by(Project.created_at)
+            .all()
+        )
+    ]
+
+    user_ids = [
+        m.user_id
+        for m in get_team_members(db, participant.id)
+        if m.user_id is not None
+    ]
+    if participant.type == "team":
+        for m in get_team_members(db, participant.id):
+            user = db.get(User, m.user_id) if m.user_id else None
+            if user is None:
+                continue
+            response.members.append(
+                TeamMemberPublic(
+                    display_name=user.display_name or "anonymous",
+                    role_in_team=m.role_in_team,
+                )
+            )
+    elif user_ids:
+        rows = (
+            db.query(Participant, ParticipantMember)
+            .join(ParticipantMember, ParticipantMember.participant_id == Participant.id)
+            .filter(
+                ParticipantMember.user_id.in_(user_ids),
+                Participant.type == "team",
+                Participant.status == "active",
+                Participant.id != participant.id,
+            )
+            .all()
+        )
+        seen: set[str] = set()
+        for team, membership in rows:
+            if team.id in seen:
+                continue
+            seen.add(team.id)
+            response.teams.append(
+                RelatedTeam(
+                    id=team.id,
+                    display_name=team.display_name,
+                    role_in_team=membership.role_in_team,
+                )
+            )
+
+    return response
 
 
 # Team endpoints
