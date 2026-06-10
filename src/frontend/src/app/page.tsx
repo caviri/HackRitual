@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/status-badge';
 import { LiveCountdown } from '../components/live-countdown';
 import { WinnerShowcase } from '../components/winner-showcase';
 import { DitheredImage } from '../components/dithered-image';
+import { api, type AnnouncementDTO } from '../lib/api';
 import type { ImageVariant } from '../lib/mocks';
 import {
   STATES,
@@ -60,9 +61,11 @@ const SPECIMEN_BY_STATE: Record<
 
 export default function HomePage() {
   const [data, setData] = useState<StageData>(getStageData('OPEN'));
+  const [announcements, setAnnouncements] = useState<AnnouncementDTO[]>([]);
 
   useEffect(() => {
     setData(getStageData(parseStageFromUrl(window.location.search)));
+    void api.announcements().then(setAnnouncements);
   }, []);
 
   const { state, hero, phases, proposals, participants, tracks, winners } = data;
@@ -161,6 +164,41 @@ export default function HomePage() {
         </aside>
         </div>
       </section>
+
+      {/* ━━━━━━━━━━━━━━━━━━━ DISPATCHES ━━━━━━━━━━━━━━━━━ */}
+      {announcements.length > 0 && (
+        <section className="border-b border-rule bg-bg-elev/40">
+          <div className="mx-auto w-full max-w-6xl px-6 py-10">
+            <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-5">
+              ▸ dispatches from the keeper
+            </p>
+            <ul
+              className={`grid gap-4 ${
+                announcements.length >= 3
+                  ? 'md:grid-cols-3'
+                  : announcements.length === 2
+                    ? 'md:grid-cols-2'
+                    : ''
+              }`}
+            >
+              {announcements.slice(0, 3).map((a) => (
+                <li key={a.id} className="ascii-frame p-5">
+                  <p className="font-mono text-[0.68rem] uppercase tracking-widest text-fg-dim mb-2">
+                    {new Date(a.created_at).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
+                  <h2 className="font-display italic text-xl text-fg mb-2">{a.title}</h2>
+                  <p className="text-fg-muted text-[0.9rem] leading-relaxed whitespace-pre-line">
+                    {a.body}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━ STATE STRIP ━━━━━━━━━━━━━━━━ */}
       <section className="border-b border-rule">

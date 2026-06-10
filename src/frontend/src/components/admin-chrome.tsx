@@ -27,6 +27,7 @@ export function WarningBand({ message }: BandProps) {
 const ADMIN_LINKS = [
   { href: '/admin/', label: 'overview', glyph: '◆' },
   { href: '/admin/applications/', label: 'applications', glyph: '✉' },
+  { href: '/admin/announcements/', label: 'dispatches', glyph: '▸' },
   { href: '/admin/proposals/', label: 'proposals', glyph: '◇' },
   { href: '/admin/judging/', label: 'judging', glyph: '✺' },
   { href: '/admin/agents/', label: 'agents', glyph: '▰' },

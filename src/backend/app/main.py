@@ -307,6 +307,12 @@ def create_app() -> FastAPI:
     from app.routers.agents import (
         self_router as agent_self_router,
     )
+    from app.routers.announcements import (
+        admin_router as announcements_admin_router,
+    )
+    from app.routers.announcements import (
+        public_router as announcements_router,
+    )
     from app.routers.applications import (
         admin_router as applications_admin_router,
     )
@@ -353,6 +359,8 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(announcements_router)
+    app.include_router(announcements_admin_router)
     app.include_router(applications_router)
     app.include_router(applications_admin_router)
     app.include_router(participants_router)
