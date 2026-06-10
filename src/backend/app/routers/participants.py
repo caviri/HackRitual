@@ -17,6 +17,8 @@ from app.schemas.participants import (
     ParticipantStatusUpdate,
     ParticipantUpdate,
     TeamCreate,
+    TeamMemberPublic,
+    TeamPublicResponse,
     TeamResponse,
 )
 from app.services.participants import (
@@ -79,7 +81,7 @@ def create_participant(
 
 @router.get("/participants", response_model=ParticipantListResponse)
 def list_participants_endpoint(
-    type: Optional[str] = Query(None, description="Filter by type (human|agent|team)"),
+    type: str | None = Query(None, description="Filter by type (human|agent|team)"),
     status: str = Query("active", description="Filter by status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
@@ -162,6 +164,41 @@ def get_participant(
 
 
 # Team endpoints
+@router.get("/teams", response_model=list[TeamPublicResponse])
+def list_teams(db: Session = Depends(get_db)) -> list[TeamPublicResponse]:
+    """Public team roster: every active team with its members by display
+    name and role. No emails, no invite codes."""
+    from app.models.participant import Participant
+    from app.models.user import User
+
+    event_id = get_event_id(db)
+    teams = (
+        db.query(Participant)
+        .filter(
+            Participant.event_id == event_id,
+            Participant.type == "team",
+            Participant.status == "active",
+        )
+        .order_by(Participant.created_at)
+        .all()
+    )
+    out: list[TeamPublicResponse] = []
+    for team in teams:
+        response = TeamPublicResponse.model_validate(team)
+        for m in get_team_members(db, team.id):
+            user = db.get(User, m.user_id) if m.user_id else None
+            if user is None:
+                continue
+            response.members.append(
+                TeamMemberPublic(
+                    display_name=user.display_name or "anonymous",
+                    role_in_team=m.role_in_team,
+                )
+            )
+        out.append(response)
+    return out
+
+
 @router.post("/teams", response_model=TeamResponse, status_code=status.HTTP_201_CREATED)
 def create_team_endpoint(
     data: TeamCreate,
@@ -396,7 +433,7 @@ def admin_list_participants(
 @router.post("/admin/participants", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
 def admin_create_participant(
     data: ParticipantCreate,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):

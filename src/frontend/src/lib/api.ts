@@ -353,6 +353,22 @@ export interface AnnouncementDTO {
   modified_at: string;
 }
 
+export interface TeamMemberDTO {
+  display_name: string;
+  role_in_team: string;
+}
+
+export interface TeamDTO {
+  id: string;
+  event_id: string;
+  type: string;
+  display_name: string;
+  affiliation: string | null;
+  status: string;
+  is_waiting: boolean;
+  members: TeamMemberDTO[];
+}
+
 export interface AdminUserDTO {
   id: string;
   email: string;
@@ -500,6 +516,9 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
     }),
+
+  // Public team roster — members by display name, no emails or invite codes.
+  teams: () => fetchJson<TeamDTO[]>('/api/teams', []),
 
   // ── announcements (dispatches under the hero)
   announcements: () =>

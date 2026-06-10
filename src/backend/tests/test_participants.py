@@ -11,7 +11,7 @@ Tests cover:
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -46,8 +46,8 @@ class TestSoloParticipantCreation:
                     title="Test Event",
                     type="hackathon",
                     state="OPEN",
-                    start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                    end_at=datetime(2026, 12, 31, tzinfo=timezone.utc),
+                    start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    end_at=datetime(2026, 12, 31, tzinfo=UTC),
                 )
                 db.add(event)
                 db.commit()
@@ -761,3 +761,25 @@ class TestAdminModeration:
             headers=get_headers(token),
         )
         assert resp.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.anyio
+async def test_public_team_roster_carries_members_without_secrets(client):
+    """GET /api/teams lists members by display name — no emails, no invite codes."""
+    from app.database import SessionLocal
+    from app.services.seeder import seed_fixtures
+
+    with SessionLocal() as db:
+        seed_fixtures(db)
+
+    resp = await client.get("/api/teams")
+    assert resp.status_code == 200
+    teams = resp.json()
+    owls = next((t for t in teams if t["display_name"] == "the_owls"), None)
+    assert owls is not None
+    roles = {m["display_name"]: m["role_in_team"] for m in owls["members"]}
+    assert roles.get("June K.") == "captain"
+    assert roles.get("Ada Cole") == "member"
+    blob = resp.text
+    assert "invite_code" not in blob
+    assert "@demo.rite" not in blob

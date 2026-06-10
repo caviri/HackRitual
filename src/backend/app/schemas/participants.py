@@ -1,13 +1,12 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
 class ParticipantBase(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=100)
-    affiliation: Optional[str] = Field(None, max_length=200)
-    links: Optional[list[str]] = Field(default_factory=list)
+    affiliation: str | None = Field(None, max_length=200)
+    links: list[str] | None = Field(default_factory=list)
 
 
 class ParticipantCreate(ParticipantBase):
@@ -15,15 +14,15 @@ class ParticipantCreate(ParticipantBase):
 
 
 class ParticipantUpdate(BaseModel):
-    display_name: Optional[str] = Field(None, min_length=1, max_length=100)
-    affiliation: Optional[str] = Field(None, max_length=200)
-    links: Optional[list[str]] = Field(default=None)
+    display_name: str | None = Field(None, min_length=1, max_length=100)
+    affiliation: str | None = Field(None, max_length=200)
+    links: list[str] | None = Field(default=None)
 
 
 class ParticipantMemberInfo(BaseModel):
-    user_id: Optional[str] = None
-    display_name: Optional[str] = None
-    email: Optional[str] = None
+    user_id: str | None = None
+    display_name: str | None = None
+    email: str | None = None
     role_in_team: str
 
 
@@ -32,8 +31,8 @@ class ParticipantResponse(BaseModel):
     event_id: str
     type: str
     display_name: str
-    affiliation: Optional[str] = None
-    links: Optional[list[str]] = None
+    affiliation: str | None = None
+    links: list[str] | None = None
     status: str
     created_at: datetime
 
@@ -45,11 +44,22 @@ class ParticipantPublicResponse(BaseModel):
     event_id: str
     type: str
     display_name: str
-    affiliation: Optional[str] = None
+    affiliation: str | None = None
     status: str
     is_waiting: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class TeamMemberPublic(BaseModel):
+    """A team member as shown publicly — name and role, never the email."""
+
+    display_name: str
+    role_in_team: str
+
+
+class TeamPublicResponse(ParticipantPublicResponse):
+    members: list[TeamMemberPublic] = Field(default_factory=list)
 
 
 class TeamCreate(ParticipantBase):
