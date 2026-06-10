@@ -36,23 +36,6 @@ async def _handle_score_submission(db: Session, task: Task) -> None:
     db.commit()
 
 
-async def _handle_send_email(db: Session, task: Task) -> None:
-    from app.services.email import send_email
-
-    payload = json.loads(task.payload_json or "{}")
-    to = payload.get("to")
-    if not to:
-        raise ValueError("send_email requires 'to'")
-    ok = await send_email(
-        to,
-        payload.get("subject", "(no subject)"),
-        payload.get("body_html", ""),
-        payload.get("body_text", ""),
-    )
-    if not ok:
-        raise RuntimeError("email dispatch failed")
-
-
 async def _handle_export_bundle(db: Session, task: Task) -> None:
     from app.services.export_bundle import RedactionConfig, build_bundle
 
@@ -77,7 +60,6 @@ async def _handle_push_github(db: Session, task: Task) -> None:
 def default_handlers() -> dict[str, Handler]:
     return {
         "score_submission": _handle_score_submission,
-        "send_email": _handle_send_email,
         "export_bundle": _handle_export_bundle,
         "push_github": _handle_push_github,
     }

@@ -218,9 +218,9 @@ POST /api/event/transitions
               How a human signs in
             </h3>
             <ol className="text-fg-muted text-[0.95rem] space-y-2 list-none pl-0">
-              <li>1. Visit <Link href="/signin/" className="text-primary hover:underline">/signin/</Link>, speak your email.</li>
-              <li>2. A six-glyph code lands in your inbox (or in the container logs in dev mode).</li>
-              <li>3. Type it back. A session cookie is set; you are in the circle.</li>
+              <li>1. Petition at <Link href="/apply/" className="text-primary hover:underline">/apply/</Link> — or arrive via the organizers&apos; CSV import.</li>
+              <li>2. An organizer approves you and sends your access key (three words bound by hyphens) by hand.</li>
+              <li>3. Speak the key at <Link href="/signin/" className="text-primary hover:underline">/signin/</Link>. A session cookie is set; you are in the circle.</li>
               <li>4. The platform automatically creates a Participant for you in the current event — you can immediately propose projects and submit work.</li>
             </ol>
             <h3 className="font-display italic text-xl text-fg mt-6 mb-2">
@@ -552,13 +552,7 @@ docker compose up --build
 {`APP_BASE_URL=https://your-host
 JWT_SECRET=<32 hex chars from secrets.token_hex(32)>
 ADMIN_SEED_EMAILS=you@yourdomain.com
-
-# SMTP — magic-link emails
-SMTP_HOST=smtp.resend.com         # or "console" for dev (prints to stdout)
-SMTP_PORT=587
-SMTP_USER=resend
-SMTP_PASS=<your-resend-key>
-SMTP_FROM=HackRitual <noreply@your.domain>
+ADMIN_PASSWORD=<the primary admin's login password>
 
 # Event metadata
 EVENT_ID=light-and-lichen

@@ -11,15 +11,12 @@
 ```bash
 cd src/backend
 uv sync --extra dev                 # create .venv, install all deps
-cp ../.env.example .env             # edit values; SMTP_HOST=console for dev
+cp ../.env.example .env             # edit values (JWT_SECRET, ADMIN_*, EVENT_*)
 uv run hackritual migrate           # apply Alembic migrations
 uv run hackritual serve --reload    # → http://localhost:7860
 ```
 
 Or from the repo root via `make`: `make install-dev`, `make migrate`, `make serve`.
-
-In dev SMTP mode (`SMTP_HOST=console`/`localhost`), login codes print to the
-server log — no real mail server needed.
 
 ## Frontend
 
@@ -66,16 +63,6 @@ uv run alembic upgrade head
 
 Chain `down_revision` on the current head. Verify it applies on a fresh DB before
 relying on it.
-
-## Email testing with a real SMTP
-
-Use [Mailpit](https://github.com/axllent/mailpit) as a local SMTP sink:
-
-```bash
-docker run -p 1025:1025 -p 8025:8025 axllent/mailpit
-# .env: SMTP_HOST=localhost SMTP_PORT=1025 SMTP_USER=x SMTP_PASS=x
-# view mail at http://localhost:8025
-```
 
 ## Building the production image
 

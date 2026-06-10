@@ -67,7 +67,6 @@ def test_check_db_returns_true(_set_env):
 
 EXPECTED_TABLES = {
     "users",
-    "login_codes",
     "sessions",
     "participants",
     "participant_members",
@@ -150,7 +149,7 @@ def test_task_crud(_set_env):
     from app.models.task import Task
 
     with SessionLocal() as db:
-        t = Task(type="send_email", ref_id="some-id")
+        t = Task(type="export_bundle", ref_id="some-id")
         db.add(t)
         db.commit()
         fetched = db.get(Task, t.id)
@@ -170,24 +169,6 @@ def test_audit_log_crud(_set_env):
         fetched = db.get(AuditLog, log.id)
         assert fetched is not None
         assert fetched.action == "test.action"
-
-
-def test_login_code_crud(_set_env):
-    from datetime import datetime, timedelta
-    from app.database import SessionLocal
-    from app.models.login_code import LoginCode
-
-    with SessionLocal() as db:
-        lc = LoginCode(
-            email="lc@test.local",
-            code_hash="abc123",
-            expires_at=datetime.utcnow() + timedelta(minutes=15),
-        )
-        db.add(lc)
-        db.commit()
-        fetched = db.get(LoginCode, lc.id)
-        assert fetched is not None
-        assert fetched.used_at is None
 
 
 # ------------------------------------------------------------------ #

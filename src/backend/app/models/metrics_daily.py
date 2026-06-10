@@ -15,7 +15,6 @@ class MetricsDaily(Base):
     submissions_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     logins_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     agent_submissions_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    email_sent_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     rate_limit_triggered_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     scoring_avg_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     scoring_max_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)

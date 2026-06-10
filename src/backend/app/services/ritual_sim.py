@@ -94,7 +94,6 @@ class RitualReport:
     top_score: float = 0.0
     export_files: int = 0
     export_bytes: int = 0
-    emails_sent: int = 0
     wards_held: int = 0          # operations correctly refused by the rules
     audit_entries: int = 0
     transcript: list[tuple[str, str]] = field(default_factory=list)
@@ -562,12 +561,6 @@ class Ritual:
                 "ok",
                 f"The artefact holds {len(names)} files: {', '.join(sorted(names))}.",
             )
-
-        # The ritual sent its own notices along the way (phase changes, receipts).
-        m = await self.client.get("/api/admin/email/metrics", headers=self.admin_headers)
-        if m.status_code == 200:
-            self.report.emails_sent = m.json().get("sent", 0)
-            self._say("ok", f"{self.report.emails_sent} notices dispatched over the rite.")
 
     async def chronicle(self) -> None:
         """Read back the audit log — the register every gate kept."""

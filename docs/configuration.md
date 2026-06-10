@@ -5,31 +5,28 @@ process environment, or a `.env` file in local dev). Settings are validated at
 startup — a missing required variable fails fast with a clear error rather than
 crashing later. See `.env.example` in the repo root for a copy-paste template.
 
-> One of `ADMIN_SEED_EMAILS` or `ADMIN_SETUP_TOKEN` **must** be set, or startup
-> aborts (otherwise no one could ever become an admin).
+> `ADMIN_SEED_EMAILS` and `ADMIN_PASSWORD` **must** both be set, or startup
+> aborts (otherwise no one could ever log in).
 
 ## Required
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `APP_BASE_URL` | Public URL of the instance (email links, CORS, secure-cookie detection) | `https://myevent.hf.space` |
+| `APP_BASE_URL` | Public URL of the instance (CORS, secure-cookie detection) | `https://myevent.hf.space` |
 | `JWT_SECRET` | Secret for signing JWTs. Must be stable across restarts. | `python3 -c "import secrets;print(secrets.token_hex(32))"` |
-| `SMTP_HOST` | SMTP server hostname. `localhost`/`127.0.0.1`/`console` → dev mode (codes printed to stdout) | `smtp.gmail.com` |
-| `SMTP_USER` | SMTP username | `noreply@example.com` |
-| `SMTP_PASS` | SMTP password / app password | `xxxx-xxxx-xxxx-xxxx` |
-| `SMTP_FROM` | Sender address | `noreply@example.com` |
 | `EVENT_ID` | Unique event id (no spaces) | `hackritual-bern-2026` |
 | `EVENT_TITLE` | Display title | `HackRitual Bern 2026` |
 | `EVENT_START` | ISO 8601 start datetime | `2026-03-01T09:00:00+01:00` |
 | `EVENT_END` | ISO 8601 end datetime | `2026-03-02T17:00:00+01:00` |
-| **one of** `ADMIN_SEED_EMAILS` / `ADMIN_SETUP_TOKEN` | How the first admin is granted | see below |
+| `ADMIN_SEED_EMAILS` | Comma-separated admin emails; the first is the primary admin | `you@example.com` |
+| `ADMIN_PASSWORD` | The primary admin's login password (min 8 chars) | `a-long-strong-phrase` |
 
 ## Admin seeding
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADMIN_SEED_EMAILS` | — | Comma-separated emails that receive the `admin` role on first login |
-| `ADMIN_SETUP_TOKEN` | — | One-time token to claim admin via `/api/setup` |
+| `ADMIN_SEED_EMAILS` | — | Comma-separated emails that hold the `admin` role. The **first** address is the primary admin: its access password is re-synced to `ADMIN_PASSWORD` on every startup (the lockout recovery path). Other seed admins get a generated password, visible in the admin users list. |
+| `ADMIN_PASSWORD` | — | Login password for the primary admin |
 
 ## Optional
 
@@ -38,7 +35,6 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 | `DB_PATH` | `/data/app.db` | SQLite database path |
 | `UPLOAD_DIR` | `/data/uploads` | Upload directory |
 | `EVENT_TYPE` | `hackathon` | Event type label |
-| `SMTP_PORT` | `587` | SMTP port (587 STARTTLS, 465 TLS) |
 | `LOG_LEVEL` | `INFO` | `DEBUG` \| `INFO` \| `WARNING` \| `ERROR` \| `CRITICAL` |
 | `JWT_ALGORITHM` | `HS256` | JWT signing algorithm |
 | `JWT_EXPIRE_MINUTES` | `1440` | Session lifetime (24 h) |
@@ -53,11 +49,9 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 
 ## Notes
 
-- **Secrets** (`JWT_SECRET`, `SMTP_PASS`, `GITHUB_TOKEN`) should be set as platform
-  *secrets*, never committed. On Hugging Face Spaces, add them under
+- **Secrets** (`JWT_SECRET`, `ADMIN_PASSWORD`, `GITHUB_TOKEN`) should be set as
+  platform *secrets*, never committed. On Hugging Face Spaces, add them under
   Settings → Variables and Secrets as **Secrets**.
-- **Dev SMTP**: set `SMTP_HOST=console` (or `localhost`) to skip real sending —
-  login codes are printed to stdout. Handy for local runs and the test suite.
 - **Rate limits** (when `ENABLE_RATE_LIMIT=true`): public 60/min per truncated IP,
   authenticated users 120/min, agents 60/min. `/api/health` is exempt.
 - Inspect the resolved config (secrets masked) at runtime with

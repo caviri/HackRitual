@@ -19,7 +19,7 @@ import json
 import secrets
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -46,7 +46,6 @@ from app.schemas.leaderboard import (
     LeaderboardResponse,
 )
 from app.schemas.projects import SubmissionResponse
-from app.services import notifications
 from app.services import submissions as submission_rules
 from app.services.agents import agent_participant, link_agent_participant
 from app.services.audit import log_action
@@ -264,7 +263,6 @@ def agent_me(
 )
 def agent_create_submission(
     body: AgentSubmissionCreate,
-    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Actor = Depends(get_current_actor),
 ) -> Submission:
@@ -330,8 +328,6 @@ def agent_create_submission(
     metrics_service.increment(db, "agent_submissions_count")
     db.commit()
     db.refresh(sub)
-    # Agent participants carry no human email, so this is a no-op for them.
-    notifications.notify_submission_received(background, db, sub)
     return sub
 
 

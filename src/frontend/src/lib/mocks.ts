@@ -456,7 +456,7 @@ const DRAFT: StageData = {
     titleBottom: 'Light-and-Lichen',
     titleAccent: 'muted',
     flicker: false,
-    primaryCta: { label: 'reserve a seat', href: '/signin/' },
+    primaryCta: { label: 'petition to join', href: '/apply/' },
     secondaryCta: { label: 'read the rites', href: '/pages/rites/' },
     epigraph:
       'The circle is being drawn. No participants yet — soon, the gates will open and the forge will run.',

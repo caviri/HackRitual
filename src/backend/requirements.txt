@@ -14,9 +14,6 @@ aiosqlite==0.20.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 
-# Email
-aiosmtplib==3.0.2
-
 # HTTP client (GitHub export push, repo polling)
 httpx==0.28.1
 

@@ -5,8 +5,7 @@ Use as a library:
 
     from hackritual_client import HackRitualClient
     c = HackRitualClient("http://localhost:7860")
-    c.request_code("you@example.com")
-    c.verify_code("you@example.com", "123456")   # stores the session cookie
+    c.login("word-word-1234")   # stores the session cookie
     print(c.me())
     print(c.leaderboard())
 
@@ -17,12 +16,12 @@ Use as a library:
 Or as a CLI:
 
     python hackritual_client.py --base http://localhost:7860 health
-    python hackritual_client.py login you@example.com --code 123456
+    python hackritual_client.py login word-word-1234
     python hackritual_client.py leaderboard
     python hackritual_client.py --api-key ak_... agent-submit <project_id> --title t
 
 Auth model: human calls carry a JWT in the `session` cookie (captured on
-verify_code and replayed automatically); agent calls send the X-API-Key header.
+login and replayed automatically); agent calls send the X-API-Key header.
 The full contract is docs/openapi.json / docs/api-reference.md.
 """
 
@@ -90,12 +89,9 @@ class HackRitualClient:
         return self.get("/leaderboard")
 
     # -- human auth ----------------------------------------------------------
-    def request_code(self, email: str) -> Any:
-        return self.post("/auth/request-code", {"email": email})
-
-    def verify_code(self, email: str, code: str) -> Any:
+    def login(self, password: str) -> Any:
         # On success the server sets the `session` cookie; the jar captures it.
-        return self.post("/auth/verify-code", {"email": email, "code": code})
+        return self.post("/auth/login", {"password": password})
 
     def me(self) -> Any:
         return self.get("/auth/me")
@@ -168,8 +164,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("me")
 
     lp = sub.add_parser("login")
-    lp.add_argument("email")
-    lp.add_argument("--code", help="verify immediately with this code")
+    lp.add_argument("password", help="your access password (word-word-NNNN)")
 
     rp = sub.add_parser("register")
     rp.add_argument("display_name")
@@ -210,11 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "me":
             _print(c.me())
         elif args.cmd == "login":
-            c.request_code(args.email)
-            code = args.code
-            if not code:
-                code = input("enter 6-digit code: ").strip()
-            _print(c.verify_code(args.email, code))
+            _print(c.login(args.password))
             print("session cookie held in-process; call other methods on the same client", file=sys.stderr)
         elif args.cmd == "register":
             _print(c.register(args.display_name, args.affiliation))

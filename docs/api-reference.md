@@ -2,7 +2,7 @@
 
 > Auto-generated from [`openapi.json`](openapi.json) — **do not edit by hand**. Regenerate with `python tools/docs/gen_api_reference.py`.
 
-**HackRitual** · version `0.1.0` · 117 operations across 25 groups.
+**HackRitual** · version `0.1.0` · 120 operations across 24 groups.
 
 Every endpoint is listed below. The same spec is browsable interactively at `/api/docs` (Swagger UI) and `/api/redoc` (ReDoc) on a running server, and the machine-readable `openapi.json` can drive client codegen (e.g. `openapi-generator`, `openapi-typescript`).
 
@@ -11,8 +11,8 @@ Every endpoint is listed below. The same spec is browsable interactively at `/ap
 - [abuse](#abuse) — Admin: rate-limit stats and temporary IP blocks.
 - [admin](#admin) — Operations only the keeper can perform.
 - [agents](#agents) — Autonomous actors. Hold an API key. The `/api/agent/*` API.
-- [auth](#auth) — *Speak your name, speak the six glyphs, step into the circle.*
-- [email](#email) — Admin: aggregate email-delivery metrics.
+- [applications](#applications) — Petitions to join — filed publicly, decided by the keeper.
+- [auth](#auth) — *Speak the password you were handed, step into the circle.*
 - [event](#event) — The singleton event. The state machine of the ritual.
 - [export](#export) — The artefact bundle — download or push to GitHub.
 - [log](#log) — The audit log — every consequential act.
@@ -23,12 +23,11 @@ Every endpoint is listed below. The same spec is browsable interactively at `/ap
 - [phases](#phases) — Sub-phases inside the event lifecycle.
 - [privacy](#privacy) — What is collected, and what never is.
 - [projects](#projects) — Proposals — what is being forged. Project ≠ submission.
-- [queue](#queue) — Admin: the task queue (scoring, email, export, push).
+- [queue](#queue) — Admin: the task queue (scoring, export, push).
 - [repositories](#repositories) — Linked git repos and their commit feeds.
 - [scaffold](#scaffold) — Dev companion — tickets and docs browsing.
 - [scores](#scores) — Scores and the public leaderboard.
 - [scoring](#scoring) — Admin: the active scorer and uploaded WASM modules.
-- [setup](#setup) — First-run admin claim via setup token.
 - [submissions](#submissions) — Versioned snapshots of work, with file attachments.
 - [system](#system) — Health, status, persistent-storage probe.
 - [tracks](#tracks) — Thematic groupings that hold projects.
@@ -181,6 +180,32 @@ Safe to call repeatedly — only inserts rows that don't already exist.
 | `200` | Successful Response | [`UserListResponse`](#schema-userlistresponse) |
 | `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
 
+### `POST /api/admin/users/import-csv`
+
+**Import Users Csv**
+
+Bulk-create approved users (with access passwords) from a CSV.
+
+Header: ``name,email,team,project`` (team/project optional). Rows sharing
+a team value are gathered into a team participant. Duplicates are skipped
+and reported; bad rows are collected as errors without aborting.
+
+
+| name | in | required | type | description |
+|------|----|----------|------|-------------|
+| `session` | cookie | no | string | null |  |
+
+**Request body** *(required)*:
+
+- `multipart/form-data` → [`Body_import_users_csv_api_admin_users_import_csv_post`](#schema-body_import_users_csv_api_admin_users_import_csv_post)
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | object |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
 ### `GET /api/admin/users/{user_id}`
 
 **Get User**
@@ -213,6 +238,26 @@ Safe to call repeatedly — only inserts rows that don't already exist.
 | status | description | body |
 |--------|-------------|------|
 | `204` | Successful Response | — |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
+### `POST /api/admin/users/{user_id}/regenerate-password`
+
+**Regenerate Password**
+
+Mint a fresh access password for a user. The old one stops working
+immediately; the new one shows in the panel for copy/mailto delivery.
+
+
+| name | in | required | type | description |
+|------|----|----------|------|-------------|
+| `user_id` | path | yes | string |  |
+| `session` | cookie | no | string | null |  |
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | [`UserDetail`](#schema-userdetail) |
 | `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
 
 ### `PATCH /api/admin/users/{user_id}/role`
@@ -443,9 +488,109 @@ An agent checks one of its own submissions, with score if available.
 | `200` | Successful Response | [`AgentCreatedResponse`](#schema-agentcreatedresponse) |
 | `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
 
+## applications
+
+Petitions to join — filed publicly, decided by the keeper.
+
+### `GET /api/admin/applications`
+
+**List Applications**
+
+
+| name | in | required | type | description |
+|------|----|----------|------|-------------|
+| `status` | query | no | string | null |  |
+| `session` | cookie | no | string | null |  |
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | [`ApplicationListResponse`](#schema-applicationlistresponse) |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
+### `POST /api/admin/applications/{application_id}/approve`
+
+**Approve**
+
+Approve: mints the User and its access password. The response carries
+the password so the panel can offer copy/mailto immediately.
+
+
+| name | in | required | type | description |
+|------|----|----------|------|-------------|
+| `application_id` | path | yes | string |  |
+| `session` | cookie | no | string | null |  |
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | [`ApplicationOut`](#schema-applicationout) |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
+### `POST /api/admin/applications/{application_id}/reject`
+
+**Reject**
+
+
+| name | in | required | type | description |
+|------|----|----------|------|-------------|
+| `application_id` | path | yes | string |  |
+| `session` | cookie | no | string | null |  |
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | [`ApplicationOut`](#schema-applicationout) |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
+### `POST /api/applications`
+
+**Submit Application**
+
+File a request to join the event. The organizers review it by hand;
+if approved, your access key arrives from them directly.
+
+
+**Request body** *(required)*:
+
+- `application/json` → [`ApplicationCreate`](#schema-applicationcreate)
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `201` | Successful Response | [`ApplicationCreatedResponse`](#schema-applicationcreatedresponse) |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
+
 ## auth
 
-*Speak your name, speak the six glyphs, step into the circle.*
+*Speak the password you were handed, step into the circle.*
+
+### `POST /api/auth/login`
+
+**Login**
+
+Log in with an access password (admin-distributed). On success: issue a
+JWT session cookie.
+
+The password alone identifies the user. Failed attempts are throttled
+per IP (10 per 15 minutes); the error never reveals whether a password
+exists.
+
+
+**Request body** *(required)*:
+
+- `application/json` → [`LoginInput`](#schema-logininput)
+
+**Responses**
+
+| status | description | body |
+|--------|-------------|------|
+| `200` | Successful Response | [`LoginResponse`](#schema-loginresponse) |
+| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
 
 ### `POST /api/auth/logout`
 
@@ -500,70 +645,6 @@ Issues a fresh cookie only when the token is within 1 hour of expiry.
 | status | description | body |
 |--------|-------------|------|
 | `200` | Successful Response | [`UserOut`](#schema-userout) |
-| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
-
-### `POST /api/auth/request-code`
-
-**Request Code**
-
-Issue a magic login code and dispatch it by email.
-
-Always returns 204 — never reveals whether the email address exists.
-Rate-limited: 3 requests per email and 10 per IP per 15 minutes.
-
-
-**Request body** *(required)*:
-
-- `application/json` → [`RequestCodeInput`](#schema-requestcodeinput)
-
-**Responses**
-
-| status | description | body |
-|--------|-------------|------|
-| `204` | Successful Response | — |
-| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
-
-### `POST /api/auth/verify-code`
-
-**Verify Code**
-
-Verify the magic code. On success: create user if needed, issue JWT cookie.
-
-Rate-limited to 5 failed attempts per code window — after which all
-pending codes for the email are invalidated.
-
-
-**Request body** *(required)*:
-
-- `application/json` → [`VerifyCodeInput`](#schema-verifycodeinput)
-
-**Responses**
-
-| status | description | body |
-|--------|-------------|------|
-| `200` | Successful Response | [`VerifyCodeResponse`](#schema-verifycoderesponse) |
-| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
-
-## email
-
-Admin: aggregate email-delivery metrics.
-
-### `GET /api/admin/email/metrics`
-
-**Get Email Metrics**
-
-Counts only — sent / succeeded / failed and the last send time.
-
-
-| name | in | required | type | description |
-|------|----|----------|------|-------------|
-| `session` | cookie | no | string | null |  |
-
-**Responses**
-
-| status | description | body |
-|--------|-------------|------|
-| `200` | Successful Response | object |
 | `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
 
 ## event
@@ -1471,7 +1552,7 @@ proposed-for must exist; finer-grained ownership checks come later.
 
 ## queue
 
-Admin: the task queue (scoring, email, export, push).
+Admin: the task queue (scoring, export, push).
 
 ### `GET /api/admin/queue/failed`
 
@@ -1945,31 +2026,6 @@ Serve the active WASM module for unofficial client-side preview.
 |--------|-------------|------|
 | `200` | Successful Response | — |
 
-## setup
-
-First-run admin claim via setup token.
-
-### `POST /api/setup`
-
-**Setup**
-
-Create the first admin via setup token.
-
-Becomes unavailable (410) as soon as any admin user exists.
-Disabled entirely when ADMIN_SETUP_TOKEN is not configured.
-
-
-**Request body** *(required)*:
-
-- `application/json` → [`SetupInput`](#schema-setupinput)
-
-**Responses**
-
-| status | description | body |
-|--------|-------------|------|
-| `201` | Successful Response | [`UserOut`](#schema-userout) |
-| `422` | Validation Error | [`HTTPValidationError`](#schema-httpvalidationerror) |
-
 ## submissions
 
 Versioned snapshots of work, with file attachments.
@@ -2368,13 +2424,13 @@ must regenerate.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
 | `id`* | string | yes |  |
-| `key_preview`* | string | yes |  |
 | `name`* | string | yes |  |
-| `owner_email` | string | null | no |  |
 | `owner_user_id` | string | null | no |  |
+| `owner_email` | string | null | no |  |
 | `status`* | string | yes |  |
+| `created_at`* | string (date-time) | yes |  |
+| `key_preview`* | string | yes |  |
 
 ### Schema: AgentSelfResponse
 
@@ -2382,11 +2438,11 @@ Returned by GET /api/agent/me when authenticated via X-API-Key.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
 | `id`* | string | yes |  |
 | `name`* | string | yes |  |
 | `owner_user_id` | string | null | no |  |
 | `status`* | string | yes |  |
+| `created_at`* | string (date-time) | yes |  |
 
 ### Schema: AgentSubmissionCreate
 
@@ -2397,11 +2453,11 @@ agent's own auto-created project.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | null | no |  |
-| `payload` | object | null | no |  |
 | `project_id` | string | null | no |  |
-| `result` | string | null | no |  |
 | `title` | string | null | no |  |
+| `description` | string | null | no |  |
+| `result` | string | null | no |  |
+| `payload` | object | null | no |  |
 
 ### Schema: AgentSubmissionStatus
 
@@ -2409,12 +2465,64 @@ Agent's view of one of its submissions, with score if available.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
 | `id`* | string | yes |  |
 | `participant_id`* | string | yes |  |
-| `score` | number | null | no |  |
 | `status`* | string | yes |  |
 | `version`* | integer | yes |  |
+| `score` | number | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
+
+### Schema: ApplicationCreate
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `name`* | string | yes |  |
+| `email`* | string | yes |  |
+| `team` | string | null | no |  |
+| `project_interest` | string | null | no |  |
+
+### Schema: ApplicationCreatedResponse
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `id`* | string | yes |  |
+| `status`* | string | yes |  |
+
+### Schema: ApplicationListResponse
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `applications`* | array of [`ApplicationOut`](#schema-applicationout) | yes |  |
+| `total`* | integer | yes |  |
+| `counts`* | object | yes |  |
+
+### Schema: ApplicationOut
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `id`* | string | yes |  |
+| `name`* | string | yes |  |
+| `email`* | string | yes |  |
+| `team` | string | null | no |  |
+| `project_interest` | string | null | no |  |
+| `status`* | string | yes |  |
+| `source`* | string | yes |  |
+| `user_id` | string | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
+| `decided_at` | string (date-time) | null | no |  |
+| `user` | [`ApplicationUserOut`](#schema-applicationuserout) | null | no |  |
+
+### Schema: ApplicationUserOut
+
+The user created on approval — password included for the admin's
+copy/mailto distribution buttons.
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `id`* | string | yes |  |
+| `email`* | string | yes |  |
+| `display_name` | string | null | no |  |
+| `access_password` | string | null | no |  |
 
 ### Schema: AuditEntry
 
@@ -2422,23 +2530,29 @@ One row of the event's transition history.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `id`* | string | yes |  |
 | `action`* | string | yes |  |
 | `actor_user_id` | string | null | no |  |
-| `created_at`* | string (date-time) | yes |  |
-| `id`* | string | yes |  |
-| `metadata` | object | null | no |  |
-| `target_id` | string | null | no |  |
 | `target_type` | string | null | no |  |
+| `target_id` | string | null | no |  |
+| `metadata` | object | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
 
 ### Schema: BlockIPRequest
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `duration_hours` | integer | no |  |
 | `ip_prefix`* | string | yes | Network to block, e.g. 192.168.1.0/24 |
+| `duration_hours` | integer | no |  |
 | `reason` | string | null | no |  |
 
 ### Schema: Body_attach_submission_file_api_submissions__submission_id__files_post
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `file`* | string (binary) | yes |  |
+
+### Schema: Body_import_users_csv_api_admin_users_import_csv_post
 
 | field | type | required | description |
 |-------|------|----------|-------------|
@@ -2448,28 +2562,28 @@ One row of the event's transition history.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `brightness`* | integer | yes |  |
-| `contrast`* | number | yes |  |
 | `effect`* | string (enum: none, dither, halftone) | yes |  |
+| `contrast`* | number | yes |  |
+| `brightness`* | integer | yes |  |
 | `scale`* | number | yes |  |
 
 ### Schema: Body_upload_image_api_uploads_post
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `effect` | string (enum: none, dither, halftone) | no |  |
 | `file`* | string (binary) | yes |  |
-| `participant_id`* | string | yes |  |
 | `submission_id`* | string | yes |  |
+| `participant_id`* | string | yes |  |
+| `effect` | string (enum: none, dither, halftone) | no |  |
 
 ### Schema: Body_upload_portrait_api_me_portrait_post
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `brightness` | integer | no |  |
-| `contrast` | number | no |  |
-| `effect` | string (enum: none, dither, halftone) | no |  |
 | `file`* | string (binary) | yes |  |
+| `effect` | string (enum: none, dither, halftone) | no |  |
+| `contrast` | number | no |  |
+| `brightness` | integer | no |  |
 | `scale` | number | no |  |
 
 ### Schema: Body_upload_wasm_api_admin_scoring_upload_wasm_post
@@ -2482,16 +2596,16 @@ One row of the event's transition history.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `author_avatar_url` | string | null | no |  |
-| `author_login` | string | null | no |  |
-| `author_name`* | string | yes |  |
-| `author_profile_url` | string | null | no |  |
-| `branch` | string | null | no |  |
-| `committed_at`* | string (date-time) | yes |  |
-| `message`* | string | yes |  |
-| `message_first_line`* | string | yes |  |
 | `sha`* | string | yes |  |
 | `sha_short`* | string | yes |  |
+| `branch` | string | null | no |  |
+| `message`* | string | yes |  |
+| `message_first_line`* | string | yes |  |
+| `author_name`* | string | yes |  |
+| `author_login` | string | null | no |  |
+| `author_avatar_url` | string | null | no |  |
+| `author_profile_url` | string | null | no |  |
+| `committed_at`* | string (date-time) | yes |  |
 
 ### Schema: EventConfig
 
@@ -2499,12 +2613,12 @@ The configurable rules of the ritual, stored as JSON on the Event.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `agent_policy` | string (enum: allowed, forbidden) | no |  |
-| `auto_score` | boolean | no |  |
-| `leaderboard_mode` | string (enum: best, latest) | no |  |
 | `registration_open` | boolean | no |  |
 | `submission_limit_per_participant` | integer | no |  |
 | `submission_limit_window_hours` | integer | no |  |
+| `leaderboard_mode` | string (enum: best, latest) | no |  |
+| `agent_policy` | string (enum: allowed, forbidden) | no |  |
+| `auto_score` | boolean | no |  |
 | `tracks` | array of [`Track`](#schema-track) | no |  |
 
 ### Schema: EventConfigUpdate
@@ -2513,12 +2627,12 @@ Partial update of event configuration. Only set fields are changed.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `agent_policy` | string (enum: allowed, forbidden) | null | no |  |
-| `auto_score` | boolean | null | no |  |
-| `leaderboard_mode` | string (enum: best, latest) | null | no |  |
 | `registration_open` | boolean | null | no |  |
 | `submission_limit_per_participant` | integer | null | no |  |
 | `submission_limit_window_hours` | integer | null | no |  |
+| `leaderboard_mode` | string (enum: best, latest) | null | no |  |
+| `agent_policy` | string (enum: allowed, forbidden) | null | no |  |
+| `auto_score` | boolean | null | no |  |
 | `tracks` | array of [`Track`](#schema-track) | null | no |  |
 
 ### Schema: EventResponse
@@ -2527,23 +2641,23 @@ Public view of the event the container is hosting.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `config`* | [`EventConfig`](#schema-eventconfig) | yes |  |
-| `end`* | string (date-time) | yes |  |
 | `id`* | string | yes |  |
-| `start`* | string (date-time) | yes |  |
-| `state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes |  |
 | `title`* | string | yes |  |
 | `type`* | string | yes |  |
+| `state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes |  |
+| `start`* | string (date-time) | yes |  |
+| `end`* | string (date-time) | yes |  |
+| `config`* | [`EventConfig`](#schema-eventconfig) | yes |  |
 
 ### Schema: ExportGenerateResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `download_url`* | string | yes |  |
 | `export_id`* | string | yes |  |
-| `redaction_mode`* | string (enum: public, private, full) | yes |  |
-| `size_bytes`* | integer | yes |  |
 | `status`* | string | yes |  |
+| `size_bytes`* | integer | yes |  |
+| `redaction_mode`* | string (enum: public, private, full) | yes |  |
+| `download_url`* | string | yes |  |
 
 ### Schema: ExportPreviewResponse
 
@@ -2556,9 +2670,9 @@ Public view of the event the container is hosting.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `include_assets` | boolean | no |  |
-| `include_audit` | boolean | no |  |
 | `redaction_mode` | string (enum: public, private, full) | no |  |
+| `include_audit` | boolean | no |  |
+| `include_assets` | boolean | no |  |
 
 ### Schema: HTTPValidationError
 
@@ -2583,113 +2697,125 @@ Attributes:
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `db_ok`* | boolean | yes |  |
+| `status`* | string | yes |  |
+| `version`* | string | yes |  |
 | `event_id`* | string | yes |  |
 | `event_state`* | string | yes |  |
 | `persistent_storage`* | boolean | yes |  |
-| `status`* | string | yes |  |
-| `version`* | string | yes |  |
+| `db_ok`* | boolean | yes |  |
 
 ### Schema: LeaderboardEntry
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `last_submission_at` | string (date-time) | null | no |  |
-| `participant`* | [`LeaderboardParticipant`](#schema-leaderboardparticipant) | yes |  |
 | `rank`* | integer | yes |  |
+| `participant`* | [`LeaderboardParticipant`](#schema-leaderboardparticipant) | yes |  |
 | `score`* | number | yes |  |
 | `submission_count`* | integer | yes |  |
+| `last_submission_at` | string (date-time) | null | no |  |
 
 ### Schema: LeaderboardParticipant
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `display_name`* | string | yes |  |
 | `id`* | string | yes |  |
+| `display_name`* | string | yes |  |
 | `type`* | string | yes |  |
 
 ### Schema: LeaderboardResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `entries`* | array of [`LeaderboardEntry`](#schema-leaderboardentry) | yes |  |
 | `event_id`* | string | yes |  |
 | `event_state`* | string | yes |  |
 | `leaderboard_mode`* | string | yes |  |
+| `entries`* | array of [`LeaderboardEntry`](#schema-leaderboardentry) | yes |  |
 
 ### Schema: LogEntry
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `action`* | string | yes |  |
+| `id`* | string | yes |  |
+| `ts`* | string (date-time) | yes |  |
 | `actor` | string | null | no |  |
 | `actor_id` | string | null | no |  |
-| `id`* | string | yes |  |
-| `summary` | string | null | no |  |
-| `target_id` | string | null | no |  |
+| `action`* | string | yes |  |
 | `target_type` | string | null | no |  |
-| `ts`* | string (date-time) | yes |  |
+| `target_id` | string | null | no |  |
+| `summary` | string | null | no |  |
 
 ### Schema: LogPage
 
 | field | type | required | description |
 |-------|------|----------|-------------|
 | `entries`* | array of [`LogEntry`](#schema-logentry) | yes |  |
+| `total`* | integer | yes |  |
 | `limit`* | integer | yes |  |
 | `offset`* | integer | yes |  |
-| `total`* | integer | yes |  |
+
+### Schema: LoginInput
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `password`* | string | yes |  |
+
+### Schema: LoginResponse
+
+| field | type | required | description |
+|-------|------|----------|-------------|
+| `user`* | [`UserOut`](#schema-userout) | yes |  |
 
 ### Schema: MeResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `display_name` | string | null | no |  |
-| `email`* | string | yes |  |
 | `id`* | string | yes |  |
+| `email`* | string | yes |  |
+| `role`* | string | yes |  |
+| `display_name` | string | null | no |  |
 | `participant` | object | null | no |  |
 | `portrait` | [`PortraitInfo`](#schema-portraitinfo) | null | no |  |
-| `role`* | string | yes |  |
 
 ### Schema: PageCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `title`* | string | yes |  |
 | `content`* | string | yes |  |
+| `visible` | boolean | no |  |
 | `order` | integer | no |  |
 | `phase_id` | string | null | no |  |
-| `title`* | string | yes |  |
-| `visible` | boolean | no |  |
 
 ### Schema: PageResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `content`* | string | yes |  |
-| `created_at`* | string (date-time) | yes |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `modified_at`* | string (date-time) | yes |  |
+| `event_id`* | string | yes |  |
+| `title`* | string | yes |  |
+| `content`* | string | yes |  |
+| `visible`* | boolean | yes |  |
 | `order`* | integer | yes |  |
 | `phase_id` | string | null | no |  |
-| `title`* | string | yes |  |
-| `visible`* | boolean | yes |  |
+| `created_at`* | string (date-time) | yes |  |
+| `modified_at`* | string (date-time) | yes |  |
 
 ### Schema: PageUpdate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `title` | string | null | no |  |
 | `content` | string | null | no |  |
+| `visible` | boolean | null | no |  |
 | `order` | integer | null | no |  |
 | `phase_id` | string | null | no |  |
-| `title` | string | null | no |  |
-| `visible` | boolean | null | no |  |
 
 ### Schema: ParticipantCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
 | `display_name`* | string | yes |  |
+| `affiliation` | string | null | no |  |
 | `links` | array of string | null | no |  |
 | `type` | string | no |  |
 
@@ -2697,45 +2823,45 @@ Attributes:
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `page`* | integer | yes |  |
-| `pages`* | integer | yes |  |
 | `participants`* | array of [`ParticipantPublicResponse`](#schema-participantpublicresponse) | yes |  |
-| `per_page`* | integer | yes |  |
 | `total`* | integer | yes |  |
+| `page`* | integer | yes |  |
+| `per_page`* | integer | yes |  |
+| `pages`* | integer | yes |  |
 
 ### Schema: ParticipantMemberInfo
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `user_id` | string | null | no |  |
 | `display_name` | string | null | no |  |
 | `email` | string | null | no |  |
 | `role_in_team`* | string | yes |  |
-| `user_id` | string | null | no |  |
 
 ### Schema: ParticipantPublicResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
-| `display_name`* | string | yes |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `is_waiting` | boolean | no |  |
-| `status`* | string | yes |  |
+| `event_id`* | string | yes |  |
 | `type`* | string | yes |  |
+| `display_name`* | string | yes |  |
+| `affiliation` | string | null | no |  |
+| `status`* | string | yes |  |
+| `is_waiting` | boolean | no |  |
 
 ### Schema: ParticipantResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
-| `created_at`* | string (date-time) | yes |  |
-| `display_name`* | string | yes |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
+| `event_id`* | string | yes |  |
+| `type`* | string | yes |  |
+| `display_name`* | string | yes |  |
+| `affiliation` | string | null | no |  |
 | `links` | array of string | null | no |  |
 | `status`* | string | yes |  |
-| `type`* | string | yes |  |
+| `created_at`* | string (date-time) | yes |  |
 
 ### Schema: ParticipantStatusUpdate
 
@@ -2747,31 +2873,31 @@ Attributes:
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
 | `display_name` | string | null | no |  |
+| `affiliation` | string | null | no |  |
 | `links` | array of string | null | no |  |
 
 ### Schema: PhaseCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | null | no |  |
-| `ends_at` | string (date-time) | null | no |  |
 | `name`* | string | yes |  |
+| `description` | string | null | no |  |
 | `starts_at` | string (date-time) | null | no |  |
+| `ends_at` | string (date-time) | null | no |  |
 
 ### Schema: PhaseResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `description` | string | null | no |  |
-| `ends_at` | string (date-time) | null | no |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `modified_at`* | string (date-time) | yes |  |
+| `event_id`* | string | yes |  |
 | `name`* | string | yes |  |
+| `description` | string | null | no |  |
 | `starts_at` | string (date-time) | null | no |  |
+| `ends_at` | string (date-time) | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
+| `modified_at`* | string (date-time) | yes |  |
 
 ### Schema: PortraitInfo
 
@@ -2779,36 +2905,36 @@ The user's portrait — dithered/halftoned face. None if not uploaded yet.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `brightness` | integer | null | no |  |
-| `contrast` | number | null | no |  |
-| `effect` | string | null | no |  |
-| `scale` | number | null | no |  |
 | `url` | string | null | no |  |
+| `effect` | string | null | no |  |
+| `contrast` | number | null | no |  |
+| `brightness` | integer | null | no |  |
+| `scale` | number | null | no |  |
 
 ### Schema: ProjectCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `title`* | string | yes |  |
 | `description`* | string | yes |  |
 | `image` | string | null | no |  |
-| `proposed_by_participant_id`* | string | yes |  |
-| `title`* | string | yes |  |
 | `track_id` | string | null | no |  |
+| `proposed_by_participant_id`* | string | yes |  |
 
 ### Schema: ProjectResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `description`* | string | yes |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `image` | string | null | no |  |
-| `modified_at`* | string (date-time) | yes |  |
-| `proposed_by_participant_id`* | string | yes |  |
-| `status`* | string (enum: proposed, approved, rejected) | yes |  |
-| `title`* | string | yes |  |
+| `event_id`* | string | yes |  |
 | `track_id` | string | null | no |  |
+| `proposed_by_participant_id`* | string | yes |  |
+| `title`* | string | yes |  |
+| `description`* | string | yes |  |
+| `image` | string | null | no |  |
+| `status`* | string (enum: proposed, approved, rejected) | yes |  |
+| `created_at`* | string (date-time) | yes |  |
+| `modified_at`* | string (date-time) | yes |  |
 
 ### Schema: ProjectStatusUpdate
 
@@ -2827,33 +2953,27 @@ The user's portrait — dithered/halftoned face. None if not uploaded yet.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `label` | string | null | no |  |
 | `url`* | string | yes |  |
+| `label` | string | null | no |  |
 
 ### Schema: RepositoryResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `commits` | array of [`CommitResponse`](#schema-commitresponse) | no |  |
+| `id`* | string | yes |  |
+| `project_id`* | string | yes |  |
+| `url`* | string | yes |  |
+| `host`* | string | yes |  |
+| `owner`* | string | yes |  |
+| `repo`* | string | yes |  |
+| `label` | string | null | no |  |
 | `default_branch` | string | null | no |  |
 | `description` | string | null | no |  |
-| `host`* | string | yes |  |
-| `id`* | string | yes |  |
-| `label` | string | null | no |  |
-| `last_polled_at` | string (date-time) | null | no |  |
-| `last_pushed_at` | string (date-time) | null | no |  |
-| `owner`* | string | yes |  |
-| `polling_error` | string | null | no |  |
-| `project_id`* | string | yes |  |
-| `repo`* | string | yes |  |
 | `stars` | integer | null | no |  |
-| `url`* | string | yes |  |
-
-### Schema: RequestCodeInput
-
-| field | type | required | description |
-|-------|------|----------|-------------|
-| `email`* | string | yes |  |
+| `last_pushed_at` | string (date-time) | null | no |  |
+| `last_polled_at` | string (date-time) | null | no |  |
+| `polling_error` | string | null | no |  |
+| `commits` | array of [`CommitResponse`](#schema-commitresponse) | no |  |
 
 ### Schema: ScoreCreate
 
@@ -2866,9 +2986,9 @@ average of the breakdown.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `score_value` | number | null | no |  |
 | `breakdown` | object | null | no |  |
 | `notes` | string | null | no |  |
-| `score_value` | number | null | no |  |
 
 ### Schema: ScoreOverride
 
@@ -2876,29 +2996,22 @@ Admin manual override of a score (Step 08), recorded in the audit log.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `reason` | string | null | no |  |
 | `score_value` | number | null | no |  |
 | `status` | string | null | no |  |
+| `reason` | string | null | no |  |
 
 ### Schema: ScoreResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `breakdown` | object | no |  |
 | `id`* | string | yes |  |
-| `notes` | string | null | no |  |
-| `score_value`* | number | yes |  |
-| `scored_at` | string (date-time) | null | no |  |
-| `scorer_version` | string | null | no |  |
-| `status`* | string | yes |  |
 | `submission_id`* | string | yes |  |
-
-### Schema: SetupInput
-
-| field | type | required | description |
-|-------|------|----------|-------------|
-| `email`* | string | yes |  |
-| `token`* | string | yes |  |
+| `score_value`* | number | yes |  |
+| `breakdown` | object | no |  |
+| `notes` | string | null | no |  |
+| `status`* | string | yes |  |
+| `scorer_version` | string | null | no |  |
+| `scored_at` | string (date-time) | null | no |  |
 
 ### Schema: StateTransitionRequest
 
@@ -2906,9 +3019,9 @@ Admin request to advance (or reopen) the event's state machine.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `confirm` | boolean | no | Required for the FROZEN→OPEN reopen, which undoes a closing |
-| `reason` | string | null | no | Why the ritual is advancing — recorded in the audit log |
 | `state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes | Target state |
+| `reason` | string | null | no | Why the ritual is advancing — recorded in the audit log |
+| `confirm` | boolean | no | Required for the FROZEN→OPEN reopen, which undoes a closing |
 
 ### Schema: StateTransitionResponse
 
@@ -2917,8 +3030,8 @@ Result of a successful state transition.
 | field | type | required | description |
 |-------|------|----------|-------------|
 | `id`* | string | yes |  |
-| `previous_state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes |  |
 | `state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes |  |
+| `previous_state`* | string (enum: DRAFT, OPEN, FROZEN, FINAL, ARCHIVED) | yes |  |
 | `transitioned_at`* | string (date-time) | yes |  |
 | `transitioned_by`* | string | yes |  |
 
@@ -2926,12 +3039,12 @@ Result of a successful state transition.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | null | no |  |
-| `participant_id`* | string | yes |  |
-| `payload_json` | string | null | no |  |
 | `project_id`* | string | yes |  |
-| `result` | string | null | no |  |
+| `participant_id`* | string | yes |  |
 | `title` | string | null | no |  |
+| `description` | string | null | no |  |
+| `result` | string | null | no |  |
+| `payload_json` | string | null | no |  |
 
 ### Schema: SubmissionFileResponse
 
@@ -2939,13 +3052,13 @@ Metadata for a file attached to a submission (no blob).
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at` | string (date-time) | null | no |  |
-| `filename`* | string | yes |  |
 | `id`* | string | yes |  |
-| `mime_type`* | string | yes |  |
-| `sha256`* | string | yes |  |
-| `size_bytes`* | integer | yes |  |
 | `submission_id`* | string | yes |  |
+| `filename`* | string | yes |  |
+| `mime_type`* | string | yes |  |
+| `size_bytes`* | integer | yes |  |
+| `sha256`* | string | yes |  |
+| `created_at` | string (date-time) | null | no |  |
 
 ### Schema: SubmissionListResponse
 
@@ -2953,28 +3066,28 @@ Paginated admin listing of submissions.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `page`* | integer | yes |  |
-| `pages`* | integer | yes |  |
-| `per_page`* | integer | yes |  |
 | `submissions`* | array of [`SubmissionResponse`](#schema-submissionresponse) | yes |  |
 | `total`* | integer | yes |  |
+| `page`* | integer | yes |  |
+| `per_page`* | integer | yes |  |
+| `pages`* | integer | yes |  |
 
 ### Schema: SubmissionResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `description` | string | null | no |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `modified_at`* | string (date-time) | yes |  |
-| `participant_id`* | string | yes |  |
-| `payload_json` | string | null | no |  |
+| `event_id`* | string | yes |  |
 | `project_id`* | string | yes |  |
-| `result` | string | null | no |  |
-| `status`* | string (enum: draft, final, withdrawn) | yes |  |
-| `title` | string | null | no |  |
+| `participant_id`* | string | yes |  |
 | `version`* | integer | yes |  |
+| `title` | string | null | no |  |
+| `description` | string | null | no |  |
+| `result` | string | null | no |  |
+| `payload_json` | string | null | no |  |
+| `status`* | string (enum: draft, final, withdrawn) | yes |  |
+| `created_at`* | string (date-time) | yes |  |
+| `modified_at`* | string (date-time) | yes |  |
 
 ### Schema: SubmissionStatusUpdate
 
@@ -2982,58 +3095,58 @@ Admin moderation of a submission, recorded in the audit log.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `reason` | string | null | no |  |
 | `status`* | string (enum: draft, final, withdrawn) | yes |  |
+| `reason` | string | null | no |  |
 
 ### Schema: SubmissionUpdate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | null | no |  |
-| `payload_json` | string | null | no |  |
-| `result` | string | null | no |  |
-| `status` | string (enum: draft, final, withdrawn) | null | no |  |
 | `title` | string | null | no |  |
+| `description` | string | null | no |  |
+| `result` | string | null | no |  |
+| `payload_json` | string | null | no |  |
+| `status` | string (enum: draft, final, withdrawn) | null | no |  |
 
 ### Schema: TaskResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `id`* | string | yes |  |
+| `type`* | string | yes |  |
+| `ref_id` | string | null | no |  |
+| `status`* | string | yes |  |
 | `attempts`* | integer | yes |  |
+| `max_attempts`* | integer | yes |  |
+| `last_error` | string | null | no |  |
 | `available_at`* | string (date-time) | yes |  |
+| `started_at` | string (date-time) | null | no |  |
 | `completed_at` | string (date-time) | null | no |  |
 | `created_at`* | string (date-time) | yes |  |
-| `id`* | string | yes |  |
-| `last_error` | string | null | no |  |
-| `max_attempts`* | integer | yes |  |
-| `ref_id` | string | null | no |  |
-| `started_at` | string (date-time) | null | no |  |
-| `status`* | string | yes |  |
-| `type`* | string | yes |  |
 | `updated_at`* | string (date-time) | yes |  |
 
 ### Schema: TeamCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
 | `display_name`* | string | yes |  |
+| `affiliation` | string | null | no |  |
 | `links` | array of string | null | no |  |
 
 ### Schema: TeamResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `affiliation` | string | null | no |  |
-| `created_at`* | string (date-time) | yes |  |
-| `display_name`* | string | yes |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `invite_code`* | string | yes |  |
-| `links` | array of string | null | no |  |
-| `members` | array of [`ParticipantMemberInfo`](#schema-participantmemberinfo) | no |  |
-| `status`* | string | yes |  |
+| `event_id`* | string | yes |  |
 | `type`* | string | yes |  |
+| `display_name`* | string | yes |  |
+| `affiliation` | string | null | no |  |
+| `links` | array of string | null | no |  |
+| `status`* | string | yes |  |
+| `created_at`* | string (date-time) | yes |  |
+| `invite_code`* | string | yes |  |
+| `members` | array of [`ParticipantMemberInfo`](#schema-participantmemberinfo) | no |  |
 
 ### Schema: Track
 
@@ -3041,27 +3154,27 @@ A submission track within the event.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | no |  |
 | `id`* | string | yes |  |
 | `name`* | string | yes |  |
+| `description` | string | no |  |
 
 ### Schema: TrackCreate
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `description` | string | null | no |  |
 | `name`* | string | yes |  |
+| `description` | string | null | no |  |
 
 ### Schema: TrackResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `description` | string | null | no |  |
-| `event_id`* | string | yes |  |
 | `id`* | string | yes |  |
-| `modified_at`* | string (date-time) | yes |  |
+| `event_id`* | string | yes |  |
 | `name`* | string | yes |  |
+| `description` | string | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
+| `modified_at`* | string (date-time) | yes |  |
 
 ### Schema: UpdateRoleInput
 
@@ -3073,42 +3186,44 @@ A submission track within the event.
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `effect`* | string (enum: none, dither, halftone) | yes |  |
 | `id`* | string | yes |  |
-| `mime_type`* | string | yes |  |
-| `path`* | string | yes |  |
-| `sha256`* | string | yes |  |
-| `size_bytes`* | integer | yes |  |
 | `submission_id`* | string | yes |  |
+| `path`* | string | yes |  |
 | `url`* | string | yes |  |
+| `mime_type`* | string | yes |  |
+| `size_bytes`* | integer | yes |  |
+| `sha256`* | string | yes |  |
+| `effect`* | string (enum: none, dither, halftone) | yes |  |
+| `created_at`* | string (date-time) | yes |  |
 
 ### Schema: UserDetail
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `created_at`* | string (date-time) | yes |  |
-| `email`* | string | yes |  |
 | `id`* | string | yes |  |
-| `last_login_at` | string (date-time) | null | no |  |
+| `email`* | string | yes |  |
+| `display_name` | string | null | no |  |
 | `role`* | string | yes |  |
 | `status`* | string | yes |  |
+| `access_password` | string | null | no |  |
+| `created_at`* | string (date-time) | yes |  |
+| `last_login_at` | string (date-time) | null | no |  |
 
 ### Schema: UserListResponse
 
 | field | type | required | description |
 |-------|------|----------|-------------|
+| `users`* | array of [`UserDetail`](#schema-userdetail) | yes |  |
+| `total`* | integer | yes |  |
 | `page`* | integer | yes |  |
 | `per_page`* | integer | yes |  |
-| `total`* | integer | yes |  |
-| `users`* | array of [`UserDetail`](#schema-userdetail) | yes |  |
 
 ### Schema: UserOut
 
 | field | type | required | description |
 |-------|------|----------|-------------|
-| `email`* | string | yes |  |
 | `id`* | string | yes |  |
+| `email`* | string | yes |  |
 | `role`* | string | yes |  |
 
 ### Schema: ValidationError
@@ -3118,17 +3233,4 @@ A submission track within the event.
 | `loc`* | array of string | integer | yes |  |
 | `msg`* | string | yes |  |
 | `type`* | string | yes |  |
-
-### Schema: VerifyCodeInput
-
-| field | type | required | description |
-|-------|------|----------|-------------|
-| `code`* | string | yes |  |
-| `email`* | string | yes |  |
-
-### Schema: VerifyCodeResponse
-
-| field | type | required | description |
-|-------|------|----------|-------------|
-| `user`* | [`UserOut`](#schema-userout) | yes |  |
 

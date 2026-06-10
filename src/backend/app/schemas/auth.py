@@ -14,23 +14,16 @@ def _validate_email(v: str) -> str:
     return v
 
 
-class RequestCodeInput(BaseModel):
-    email: str
+class LoginInput(BaseModel):
+    password: str
 
-    @field_validator("email")
+    @field_validator("password")
     @classmethod
-    def check_email(cls, v: str) -> str:
-        return _validate_email(v)
-
-
-class VerifyCodeInput(BaseModel):
-    email: str
-    code: str
-
-    @field_validator("email")
-    @classmethod
-    def check_email(cls, v: str) -> str:
-        return _validate_email(v)
+    def normalise_password(cls, v: str) -> str:
+        v = v.strip().lower()
+        if len(v) < 4:
+            raise ValueError("Password too short")
+        return v
 
 
 class UserOut(BaseModel):
@@ -62,5 +55,5 @@ class MeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class VerifyCodeResponse(BaseModel):
+class LoginResponse(BaseModel):
     user: UserOut

@@ -12,10 +12,7 @@ def _make_settings(**overrides):
         "APP_BASE_URL": "http://localhost:7860",
         "JWT_SECRET": "testsecret",
         "ADMIN_SEED_EMAILS": "admin@test.local",
-        "SMTP_HOST": "smtp.test",
-        "SMTP_USER": "u",
-        "SMTP_PASS": "p",
-        "SMTP_FROM": "f@test.local",
+        "ADMIN_PASSWORD": "test-admin-pass",
         "EVENT_ID": "evt-1",
         "EVENT_TITLE": "Evt",
         "EVENT_START": "2026-01-01T09:00:00+00:00",
@@ -30,19 +27,18 @@ def _make_settings(**overrides):
 class TestSettingsValidation:
     def test_valid_config_loads(self):
         s = _make_settings()
-        # smtp_port has a default (587) and is not set in the session env
-        assert s.smtp_port == 587
         # event_id is set by the session env (test-event); just verify it's non-empty
         assert s.event_id
 
     def test_requires_admin_seeding(self):
         from pydantic import ValidationError
-        with pytest.raises(ValidationError, match="ADMIN_SEED_EMAILS or ADMIN_SETUP_TOKEN"):
-            _make_settings(admin_seed_emails=None, admin_setup_token=None)
+        with pytest.raises(ValidationError, match="ADMIN_SEED_EMAILS"):
+            _make_settings(admin_seed_emails="")
 
-    def test_admin_setup_token_satisfies_requirement(self):
-        s = _make_settings(admin_seed_emails=None, admin_setup_token="tok123")
-        assert s.admin_setup_token == "tok123"
+    def test_requires_admin_password(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="ADMIN_PASSWORD"):
+            _make_settings(admin_password="short")
 
     def test_invalid_log_level_rejected(self):
         from pydantic import ValidationError

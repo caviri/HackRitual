@@ -6,7 +6,6 @@ Uses pydantic-settings for validation and .env file support in local dev.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -54,19 +53,13 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 60 * 24  # 24 h
 
     # ------------------------------------------------------------------ #
-    # Admin seeding (at least one required)
+    # Admin seeding
     # ------------------------------------------------------------------ #
-    admin_seed_emails: Optional[str] = None   # comma-separated
-    admin_setup_token: Optional[str] = None
-
-    # ------------------------------------------------------------------ #
-    # SMTP
-    # ------------------------------------------------------------------ #
-    smtp_host: str
-    smtp_port: int = 587
-    smtp_user: str
-    smtp_pass: str
-    smtp_from: str
+    # Comma-separated emails that hold the admin role. The FIRST address is
+    # the primary admin: its access password is re-synced to ADMIN_PASSWORD
+    # on every startup (which is also the lockout recovery path).
+    admin_seed_emails: str
+    admin_password: str
 
     # ------------------------------------------------------------------ #
     # Event metadata
@@ -93,29 +86,29 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # GitHub export (optional)
     # ------------------------------------------------------------------ #
-    github_export_repo: Optional[str] = None
-    github_token: Optional[str] = None
+    github_export_repo: str | None = None
+    github_token: str | None = None
     github_export_branch: str = "gh-pages"
 
     # ------------------------------------------------------------------ #
     # Validators
     # ------------------------------------------------------------------ #
     @model_validator(mode="after")
-    def require_admin_seeding(self) -> "Settings":
+    def require_admin_seeding(self) -> Settings:
         """
-        Ensure at least one admin-seeding mechanism is configured.
+        Ensure admin seeding is fully configured.
 
-        Either ``ADMIN_SEED_EMAILS`` (comma-separated list of email addresses that
-        receive the ``admin`` role on first login) or ``ADMIN_SETUP_TOKEN`` (a
-        one-time claim token) must be present.  Both may be set simultaneously.
+        ``ADMIN_SEED_EMAILS`` must contain at least one address and
+        ``ADMIN_PASSWORD`` must be non-trivial — without them no one could
+        ever log in.
 
         Raises:
-            ValueError: If neither field is provided.
+            ValueError: If either field is missing or too weak.
         """
-        if not self.admin_seed_emails and not self.admin_setup_token:
-            raise ValueError(
-                "At least one of ADMIN_SEED_EMAILS or ADMIN_SETUP_TOKEN must be set."
-            )
+        if not self.admin_seed_email_list:
+            raise ValueError("ADMIN_SEED_EMAILS must contain at least one email address.")
+        if not self.admin_password or len(self.admin_password.strip()) < 8:
+            raise ValueError("ADMIN_PASSWORD must be set (at least 8 characters).")
         return self
 
     @field_validator("log_level")

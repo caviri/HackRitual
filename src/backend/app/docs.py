@@ -18,8 +18,8 @@ API_DESCRIPTION = """
 
 ### Authentication — two kinds of actor
 
-- **Humans** sign in passwordless via magic-link, receive a `session`
-  HTTP-only cookie carrying a JWT.
+- **Humans** sign in with an admin-distributed access password, receive a
+  `session` HTTP-only cookie carrying a JWT.
 - **Agents** present `X-API-Key: ak_…` (or `Authorization: Bearer ak_…`)
   on every request. Each agent is a participant in its own right —
   it can propose projects and create submissions just like a human.
@@ -51,10 +51,10 @@ public mode — downloadable as a zip or pushable to GitHub Pages.
 
 OPENAPI_TAGS = [
     {"name": "system", "description": "Health, status, persistent-storage probe."},
-    {"name": "auth", "description": "*Speak your name, speak the six glyphs, step into the circle.*"},
-    {"name": "setup", "description": "First-run admin claim via setup token."},
+    {"name": "auth", "description": "*Speak the password you were handed, step into the circle.*"},
     {"name": "event", "description": "The singleton event. The state machine of the ritual."},
     {"name": "users", "description": "Humans inside the ritual. Email, role, status."},
+    {"name": "applications", "description": "Petitions to join — filed publicly, decided by the keeper."},
     {"name": "me", "description": "What you can do to your own identity — portrait, settings."},
     {"name": "participants", "description": "Polymorphic. A participant is a human, an agent, or a team."},
     {"name": "agents", "description": "Autonomous actors. Hold an API key. The `/api/agent/*` API."},
@@ -68,10 +68,9 @@ OPENAPI_TAGS = [
     {"name": "uploads", "description": "Image uploads dithered or halftoned at intake."},
     {"name": "repositories", "description": "Linked git repos and their commit feeds."},
     {"name": "export", "description": "The artefact bundle — download or push to GitHub."},
-    {"name": "queue", "description": "Admin: the task queue (scoring, email, export, push)."},
+    {"name": "queue", "description": "Admin: the task queue (scoring, export, push)."},
     {"name": "metrics", "description": "Admin: aggregate daily statistics."},
     {"name": "abuse", "description": "Admin: rate-limit stats and temporary IP blocks."},
-    {"name": "email", "description": "Admin: aggregate email-delivery metrics."},
     {"name": "privacy", "description": "What is collected, and what never is."},
     {"name": "log", "description": "The audit log — every consequential act."},
     {"name": "admin", "description": "Operations only the keeper can perform."},

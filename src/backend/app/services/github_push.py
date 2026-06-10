@@ -51,7 +51,7 @@ async def run_push(payload: dict) -> dict:
         files.update(static_site.generate(db))
 
     violations = github_service.validate_no_secrets(
-        files, [settings.jwt_secret, settings.smtp_pass, token]
+        files, [settings.jwt_secret, token]
     )
     if violations:
         raise RuntimeError("; ".join(violations))

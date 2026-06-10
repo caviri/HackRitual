@@ -53,8 +53,8 @@ Browser
   │
   ├─ GET  /            → Next.js static SPA (HTML/JS/CSS)
   │
-  ├─ POST /api/auth/request-code   → SMTP → user's email
-  ├─ POST /api/auth/verify-code    → JWT cookie issued
+  ├─ POST /api/applications        → petition filed (admin approves by hand)
+  ├─ POST /api/auth/login          → access password → JWT cookie issued
   │
   ├─ POST /api/submissions         → submission created
   │                                  → scoring task queued
@@ -96,7 +96,6 @@ backend/
 │   ├── middleware/       ← Auth, rate-limit middleware
 │   └── utils/
 │       ├── logging.py    ← JSON structured logging  ✓ (Step 01)
-│       ├── email.py      ← SMTP helpers              (Step 12)
 │       └── hashing.py    ← bcrypt, token utils       (Step 03)
 ├── alembic/              ← DB migrations (wired to DB_PATH)
 ├── tests/                ← pytest suite

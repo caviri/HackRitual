@@ -10,8 +10,12 @@ VALID_ROLES = {"user", "admin", "judge", "mod"}
 class UserDetail(BaseModel):
     id: str
     email: str
+    display_name: str | None = None
     role: str
     status: str
+    # Plaintext by design — the admin panel is the distribution desk for
+    # access passwords (copy/mailto). Admin-only responses.
+    access_password: str | None = None
     created_at: datetime
     last_login_at: datetime | None = None
 
@@ -32,8 +36,3 @@ class UpdateRoleInput(BaseModel):
         if self.role not in VALID_ROLES:
             raise ValueError(f"role must be one of {VALID_ROLES}")
         return self.role
-
-
-class SetupInput(BaseModel):
-    token: str
-    email: str

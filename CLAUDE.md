@@ -28,6 +28,6 @@ docker compose run --rm sim    # the ritual simulator (full lifecycle, narrated)
 - Backend is the source of truth — see `backend/app/` (routers = HTTP, services =
   logic, models = ORM, schemas = Pydantic).
 - Event lifecycle: `DRAFT → OPEN → FROZEN → FINAL → ARCHIVED`.
-- Auth: passwordless magic-link (6-digit code) → JWT in HTTP-only `session` cookie.
+- Auth: admin-distributed access password (`POST /api/auth/login`) → JWT in HTTP-only `session` cookie. No email is ever sent.
 - Tests: `pytest-asyncio`; never import app modules at module level in test files.
-- Status lives in `PROGRESS.md`; voice/tone in `docs/writing-style.md`.
+- Voice/tone in `docs/writing-style.md`.

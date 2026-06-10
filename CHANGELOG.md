@@ -9,6 +9,39 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed — no more email: admin-distributed access passwords (2026-06-10)
+
+The platform no longer sends any email. Magic-link login is replaced by a
+manual, keeper-driven credential flow:
+
+- **Password-only login.** Each user holds one generated access password
+  (`word-word-NNNN`) stored on the unique `users.access_password` column —
+  the password alone identifies the user at `POST /api/auth/login`. Failed
+  attempts are throttled per IP (10 / 15 min), which is what makes the
+  password entropy sufficient. JWT cookie, refresh, `/me`, and the agent
+  API-key flow are unchanged.
+- **Public applications.** Anonymous visitors petition at `/apply/`
+  (`POST /api/applications`). The keeper reviews the queue at
+  `/admin/applications/`; approval mints the User and its password, and the
+  panel offers **copy message** and **mailto** buttons — the keeper's own
+  mail client does the sending.
+- **CSV bulk import.** `POST /api/admin/users/import-csv` takes a
+  `name,email,team,project` CSV and creates approved users with passwords;
+  rows sharing a team are bound into one team participant. Duplicates are
+  skipped and reported, bad rows collected without aborting the batch.
+- **Admin bootstrap.** `ADMIN_SEED_EMAILS` + `ADMIN_PASSWORD` are now both
+  required; the first seed address has its password re-synced from the env
+  var on every boot (the lockout recovery path). The one-time
+  `ADMIN_SETUP_TOKEN` / `/api/setup` flow is gone.
+- **Removed.** SMTP settings and `aiosmtplib`, the email service and
+  templates, phase-change and submission-received notices, email metrics,
+  `GET /api/admin/email/metrics`, the `send_email` task type, the
+  `login_codes` table, and the daily `email_sent_count` counter (Alembic
+  migration `b8c9d0e1f2a3`).
+- **Migration note.** Pre-existing users have no password until an admin
+  hits *regenerate password* (`POST /api/admin/users/{id}/regenerate-password`)
+  and delivers it.
+
 ### Added — frontend gap-closing: console wiring, submission form, auth gate (2026-06-10)
 
 Closed the deferred Step 09/10 frontend remainders and fixed a broken admin path:
