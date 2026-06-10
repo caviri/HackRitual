@@ -289,3 +289,49 @@ def test_stage_chronicle_in_audit_log(demo_mode):
         actions = {a.action for a in db.query(AuditLog).all()}
         assert "export.sealed" in actions
         assert "verdict.inscribed" in actions
+
+
+def test_stage_event_windows_progress(demo_mode):
+    from datetime import datetime
+
+    from app.database import get_sessionmaker
+    from app.models.event import Event
+
+    now = datetime.utcnow()
+    with get_sessionmaker("DRAFT")() as db:
+        ev = db.query(Event).one()
+        assert ev.start_at > now  # the gates have not opened
+    with get_sessionmaker("OPEN")() as db:
+        ev = db.query(Event).one()
+        assert ev.start_at < now < ev.end_at  # the forge runs now
+    with get_sessionmaker("ARCHIVED")() as db:
+        ev = db.query(Event).one()
+        assert ev.end_at < now  # long past
+
+
+def test_stage_announcements_and_applications_progress(demo_mode):
+    from app.database import get_sessionmaker
+    from app.models.announcement import Announcement
+    from app.models.application import Application
+
+    with get_sessionmaker("DRAFT")() as db:
+        titles = {a.title for a in db.query(Announcement).all()}
+        assert titles == {"The circle is drawn"}
+        assert (
+            db.query(Application).filter(Application.status == "pending").count() == 5
+        )
+
+    with get_sessionmaker("OPEN")() as db:
+        titles = {a.title for a in db.query(Announcement).all()}
+        assert "The gates are open" in titles
+        assert "The verdict is inscribed" not in titles
+        assert (
+            db.query(Application).filter(Application.status == "approved").count() == 3
+        )
+        assert (
+            db.query(Application).filter(Application.status == "pending").count() == 2
+        )
+
+    with get_sessionmaker("ARCHIVED")() as db:
+        titles = {a.title for a in db.query(Announcement).all()}
+        assert "The record is sealed" in titles

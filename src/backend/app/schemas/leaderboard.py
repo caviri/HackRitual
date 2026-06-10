@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -14,12 +13,19 @@ class LeaderboardParticipant(BaseModel):
     type: str
 
 
+class LeaderboardProject(BaseModel):
+    id: str
+    title: str
+    track_id: str | None = None
+
+
 class LeaderboardEntry(BaseModel):
     rank: int
     participant: LeaderboardParticipant
     score: float
     submission_count: int
-    last_submission_at: Optional[datetime] = None
+    last_submission_at: datetime | None = None
+    project: LeaderboardProject | None = None
 
 
 class LeaderboardResponse(BaseModel):

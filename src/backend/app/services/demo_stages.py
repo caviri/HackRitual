@@ -37,15 +37,46 @@ PROFILES: dict[str, SeedProfile] = {
         submission_statuses=frozenset(),
         include_scores=False,
         force_waiting=True,
+        announcement_stages=("DRAFT",),
     ),
     "OPEN": SeedProfile(
         submission_statuses=frozenset({"draft", "withdrawn"}),
         include_scores=False,
+        decide_applications=True,
+        announcement_stages=("DRAFT", "OPEN"),
     ),
-    "FROZEN": SeedProfile(),
-    "FINAL": SeedProfile(),
-    "ARCHIVED": SeedProfile(),
+    "FROZEN": SeedProfile(
+        decide_applications=True,
+        announcement_stages=("DRAFT", "OPEN", "FROZEN"),
+    ),
+    "FINAL": SeedProfile(
+        decide_applications=True,
+        announcement_stages=("DRAFT", "OPEN", "FROZEN", "FINAL"),
+    ),
+    "ARCHIVED": SeedProfile(
+        decide_applications=True,
+        announcement_stages=("DRAFT", "OPEN", "FROZEN", "FINAL", "ARCHIVED"),
+    ),
 }
+
+# Each snapshot's event window sits where that stage would find it on a real
+# clock: DRAFT before the gates, OPEN inside the window, ARCHIVED long past.
+# (offset of start from build time, event duration)
+_STAGE_WINDOWS: dict[str, tuple] = {}
+
+
+def _stage_window(stage: str):
+    from datetime import datetime, timedelta
+
+    now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    spans = {
+        "DRAFT": (now + timedelta(days=21), now + timedelta(days=23)),
+        "OPEN": (now - timedelta(days=1), now + timedelta(days=1)),
+        "FROZEN": (now - timedelta(days=3), now - timedelta(hours=3)),
+        "FINAL": (now - timedelta(days=5), now - timedelta(days=2)),
+        "ARCHIVED": (now - timedelta(days=30), now - timedelta(days=27)),
+    }
+    return spans[stage]
 
 
 # The chronicle each snapshot carries — what the audit log would hold if the
@@ -112,15 +143,16 @@ _STAGE_HISTORY = {
 }
 
 
-def _seed_chronicle(db, stage: str) -> None:
-    """Write the stage's narrative into the audit log (deterministic times,
-    anchored to the event window). Flushes; caller commits."""
+def _seed_chronicle(db, stage: str, anchor=None) -> None:
+    """Write the stage's narrative into the audit log (deterministic offsets
+    from the stage's event start). Flushes; caller commits."""
     import json
     from datetime import timedelta
 
     from app.models.audit_log import AuditLog
 
-    anchor = settings.event_start.replace(tzinfo=None)
+    if anchor is None:
+        anchor = settings.event_start.replace(tzinfo=None)
     for chapter in _STAGE_HISTORY[stage]:
         for minutes, action, target_type, metadata in _CHRONICLE[chapter]:
             db.add(
@@ -162,6 +194,7 @@ def build_stage(stage: str, force: bool = False) -> bool:
 
     from app.models.event import Event
 
+    start_at, end_at = _stage_window(stage)
     with get_sessionmaker(stage)() as db:
         db.add(
             Event(
@@ -169,14 +202,14 @@ def build_stage(stage: str, force: bool = False) -> bool:
                 title=settings.event_title,
                 type=settings.event_type,
                 state=stage,
-                start_at=settings.event_start,
-                end_at=settings.event_end,
+                start_at=start_at,
+                end_at=end_at,
             )
         )
         db.flush()
         seed_admin_users(db)
         counts = seed_fixtures(db, PROFILES[stage])
-        _seed_chronicle(db, stage)
+        _seed_chronicle(db, stage, anchor=start_at)
         db.commit()
 
     logger.info(
