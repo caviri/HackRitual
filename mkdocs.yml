@@ -1,0 +1,47 @@
+site_name: HackRitual
+site_description: A portable, single-container event platform — backend API & docs.
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: green
+      accent: lime
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Event lifecycle: event-lifecycle.md
+  - Data model: data-model.md
+  - API:
+      - Overview: api.md
+      - Full reference: api-reference.md
+      - Interactive explorer: redoc.html
+  - Guides:
+      - Admin: admin-guide.md
+      - Agents / bots: agent-guide.md
+      - Configuration: configuration.md
+      - Deployment: deployment.md
+      - Development: development.md
+  - Writing style: writing-style.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+# The full machine-readable spec (docs/openapi.json) and the screenshots/
+# directory are copied into the site automatically by MkDocs.

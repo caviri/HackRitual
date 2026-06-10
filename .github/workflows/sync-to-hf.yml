@@ -1,0 +1,52 @@
+name: Sync to Hugging Face Space
+
+# Mirrors this repo to the HF Space on every push to main (and on demand).
+#
+# One-time setup:
+#   1. Create a write token: https://huggingface.co/settings/tokens
+#   2. Add it as a GitHub Actions secret named HF_TOKEN
+#      (repo → Settings → Secrets and variables → Actions → New repository secret)
+#
+# HF Docker Spaces build the Dockerfile at the repo ROOT, but ours lives at
+# tools/image/docker/Dockerfile. This job copies it to ./Dockerfile in the
+# ephemeral runner checkout and commits that before pushing — so the HF tree
+# gets a root Dockerfile without one cluttering the source repo. The COPY paths
+# inside the Dockerfile are repo-root-relative, so they resolve fine on HF.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Stage the Dockerfile at repo root (HF requirement)
+        run: cp tools/image/docker/Dockerfile ./Dockerfile
+
+      - name: Prepend the HF Space card to the README
+        # HF reads the Space config from YAML frontmatter at the top of README.md.
+        # We keep the README clean on GitHub and inject the card only here.
+        run: |
+          cat hf-space-header.yml README.md > README.hf.md
+          mv README.hf.md README.md
+
+      - name: Commit the HF-only tweaks into the push tree
+        run: |
+          git config user.name "hf-sync[bot]"
+          git config user.email "hf-sync@users.noreply.github.com"
+          git add -f Dockerfile README.md
+          git commit -m "ci: stage Dockerfile + HF Space card for HF Spaces build" || echo "nothing to commit"
+
+      - name: Push to the HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git push --force \
+            "https://katospiegel:${HF_TOKEN}@huggingface.co/spaces/katospiegel/HackRitual" \
+            HEAD:main
