@@ -42,6 +42,13 @@ FROM python:3.11-slim AS production
 # Copying from the official uv image is even cleaner.
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /uvx /usr/local/bin/
 
+# git is required by the build steps Hugging Face injects when the Space has
+# Dev Mode enabled (`git config --global ...`); without it the Space build
+# fails with exit 127 before the app even starts.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Non-root user for security (HF Spaces runs as non-root anyway)
 RUN useradd --create-home --uid 1000 appuser
 

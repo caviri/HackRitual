@@ -52,6 +52,9 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 - **Secrets** (`JWT_SECRET`, `ADMIN_PASSWORD`, `GITHUB_TOKEN`) should be set as
   platform *secrets*, never committed. On Hugging Face Spaces, add them under
   Settings → Variables and Secrets as **Secrets**.
+- **`UPLOAD_DIR` is served publicly** at `/uploads`. Startup refuses any
+  configuration where `DB_PATH` lies inside `UPLOAD_DIR` — that would make the
+  SQLite file (which holds plaintext access passwords) downloadable.
 - **Rate limits** (when `ENABLE_RATE_LIMIT=true`): public 60/min per truncated IP,
   authenticated users 120/min, agents 60/min. `/api/health` is exempt.
 - Inspect the resolved config (secrets masked) at runtime with

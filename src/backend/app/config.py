@@ -111,6 +111,30 @@ class Settings(BaseSettings):
             raise ValueError("ADMIN_PASSWORD must be set (at least 8 characters).")
         return self
 
+    @model_validator(mode="after")
+    def forbid_db_inside_upload_dir(self) -> Settings:
+        """
+        Refuse to start if the database file lives inside the upload directory.
+
+        ``UPLOAD_DIR`` is served publicly at ``/uploads``; a ``DB_PATH`` inside
+        it would make the SQLite file (which holds plaintext access passwords)
+        downloadable by anyone.
+
+        Raises:
+            ValueError: If ``DB_PATH`` resolves to a path under ``UPLOAD_DIR``.
+        """
+        import os
+
+        db = os.path.normpath(os.path.abspath(self.db_path))
+        uploads = os.path.normpath(os.path.abspath(self.upload_dir))
+        if db == uploads or db.startswith(uploads + os.sep):
+            raise ValueError(
+                "DB_PATH must not be inside UPLOAD_DIR — the upload directory is "
+                "served publicly at /uploads, which would expose the database "
+                "(and the access passwords it holds) for download."
+            )
+        return self
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
