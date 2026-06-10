@@ -58,6 +58,22 @@ buttons appear for everyone created.
 admin users list) mints a new one — the old one stops working immediately.
 Passwords stay visible to admins in `/admin/applications/` and the users list.
 
+## 3c. Demo stages (optional)
+
+With `DEMO_STAGES=true`, the instance also carries five sandbox databases —
+one per state, under `<data>/demo/` — each pre-seeded to look the part: DRAFT
+holds a waitlist and petitions, OPEN holds proposals and work in flight,
+FROZEN through ARCHIVED hold the sealed, scored record. A demo bar appears on
+every page; visitors flip stages freely (a `demo_stage` cookie routes their
+requests) and the **✕ live** chip returns them to the real event.
+
+Sandboxes are writable — anyone can log in with the demo keys (e.g.
+`ada@demo.rite` / `fern-lantern-4821`) or your `ADMIN_PASSWORD` and poke
+around. When they get messy, `POST /api/admin/demo/rebuild` drops and regrows
+all five in place. Notes: exports, queued tasks, and the background worker
+serve the live database only, and a login made inside one stage does not
+carry into another.
+
 ## 4. Monitor during the event
 
 - `GET /api/admin/dashboard` — live counts, event state, recent audit.

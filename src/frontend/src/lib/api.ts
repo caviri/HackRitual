@@ -276,6 +276,7 @@ export interface AdminAuditPageDTO {
 }
 
 export interface HealthDTO {
+  demo_stages?: boolean;
   status: string;
   version: string;
   event_id: string;

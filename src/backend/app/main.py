@@ -113,7 +113,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from app.config import settings
     from app.database import SessionLocal
     from app.models.event import Event
-    from app.models.user import User
 
     logger.info(
         "HackRitual starting",
@@ -145,42 +144,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("Event record exists", extra={"event_id": settings.event_id})
 
         # ---- Seed admin users (create or promote) ---------------------
-        # The first seed email is the primary admin: its access password is
-        # re-synced to ADMIN_PASSWORD on every boot, so changing the env var
-        # and restarting always restores access. Other seed admins get a
-        # generated password on first seeding (visible in the admin panel).
-        from app.services.audit import log_action
-        from app.services.passwords import generate_unique_password
+        from app.services.seeder import seed_admin_users
 
-        primary_email = settings.admin_seed_email_list[0]
-        for email in settings.admin_seed_email_list:
-            existing = db.query(User).filter_by(email=email).first()
-            if existing is None:
-                existing = User(email=email, role="admin")
-                db.add(existing)
-                db.flush()
-                log_action(db, "user.admin_seeded", target_type="user", target_id=existing.id,
-                           metadata={"method": "seed_emails"})
-                logger.info("Admin user seeded", extra={"email": email})
-            elif existing.role != "admin":
-                existing.role = "admin"
-                log_action(db, "user.role_changed", target_type="user", target_id=existing.id,
-                           metadata={"old_role": existing.role, "new_role": "admin", "method": "seed_emails"})
-                logger.info("Existing user promoted to admin", extra={"email": email})
-
-            if email == primary_email:
-                if existing.access_password != settings.admin_password:
-                    existing.access_password = settings.admin_password
-                    logger.info("Primary admin password synced from ADMIN_PASSWORD",
-                                extra={"email": email})
-            elif not existing.access_password:
-                existing.access_password = generate_unique_password(db)
-                logger.info("Generated access password for seeded admin",
-                            extra={"email": email})
+        seed_admin_users(db)
         db.commit()
 
     finally:
         db.close()
+
+    # ---- Demo stage snapshots (DEMO_STAGES=true) ------------------------
+    if settings.demo_stages:
+        from app.services.demo_stages import build_all
+
+        built = build_all(force=False)
+        logger.info("Demo stage snapshots ready", extra={"built": built})
 
     # ---- Optional auto-transition background task ----------------------
     auto_task: asyncio.Task | None = None
@@ -292,6 +269,14 @@ def create_app() -> FastAPI:
         from app.middleware.rate_limit import RateLimitMiddleware
 
         app.add_middleware(RateLimitMiddleware)
+
+    # ---------------------------------------------------------------- #
+    # Multi-stage demo routing — one SQLite snapshot per event stage
+    # ---------------------------------------------------------------- #
+    if settings.demo_stages:
+        from app.middleware.demo_stage import DemoStageMiddleware
+
+        app.add_middleware(DemoStageMiddleware)
 
     # ---------------------------------------------------------------- #
     # API routers

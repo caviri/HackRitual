@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import require_admin
+from app.middleware.demo_stage import require_primary_db
 from app.models.user import User
 from app.schemas.queue import TaskResponse
 from app.services import task_queue
-
 
 admin_queue_router = APIRouter(prefix="/api/admin/queue", tags=["queue"])
 
@@ -39,6 +39,7 @@ def queue_retry(
     task_id: str,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
+    _primary: None = Depends(require_primary_db),
 ) -> TaskResponse:
     """Resurrect a dead task — back to queued with attempts reset."""
     task = task_queue.retry_task(db, task_id)

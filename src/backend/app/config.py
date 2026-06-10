@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     enable_worker: bool = True
     # When true, the IP/abuse rate-limit middleware is active.
     enable_rate_limit: bool = True
+    # When true, each event stage is also served from its own writable SQLite
+    # snapshot under <dirname(DB_PATH)>/demo/<stage>.db — visitors pick a stage
+    # via the demo_stage cookie or ?stage= param. Default off: single-DB product.
+    demo_stages: bool = False
 
     # ------------------------------------------------------------------ #
     # WASM scoring (MVP-3) — sandbox limits for uploaded scorer modules

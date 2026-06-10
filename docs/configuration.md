@@ -41,6 +41,7 @@ crashing later. See `.env.example` in the repo root for a copy-paste template.
 | `AUTO_TRANSITIONS` | `false` | Auto-advance DRAFT→OPEN at start, OPEN→FROZEN at end |
 | `ENABLE_WORKER` | `true` | Run the in-process task queue worker + hourly cleanup sweep |
 | `ENABLE_RATE_LIMIT` | `true` | Apply the IP/abuse rate-limit middleware (`X-RateLimit-*` headers) |
+| `DEMO_STAGES` | `false` | Serve each event stage from its own writable SQLite snapshot under `<data>/demo/`. Visitors pick a stage via the demo bar (cookie `demo_stage` / `?stage=`); no selection → the primary DB. Limitations: background worker, exports, and queued tasks run against the primary only; logins are per-stage. |
 | `WASM_TIME_LIMIT_MS` | `5000` | WASM scorer time budget |
 | `WASM_MEMORY_LIMIT_MB` | `64` | WASM scorer memory ceiling |
 | `GITHUB_EXPORT_REPO` | — | `owner/repo` for the export push |

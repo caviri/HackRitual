@@ -14,9 +14,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timezone
-
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, Response
@@ -26,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.middleware.auth import require_admin
+from app.middleware.demo_stage import require_primary_db
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.export import (
@@ -38,7 +37,6 @@ from app.services.audit import log_action
 from app.services.export import build_export
 from app.services.showcase import build_showcase
 from app.services.showcase_html import render_showcase_html
-
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -141,6 +139,7 @@ def generate_export(
     body: ExportRequest,
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
+    _primary: None = Depends(require_primary_db),
 ) -> ExportGenerateResponse:
     """Generate the export bundle synchronously and register it for download."""
     redaction = export_bundle.RedactionConfig(
@@ -161,7 +160,7 @@ def generate_export(
         "path": path,
         "size": len(payload),
         "mode": body.redaction_mode,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     return ExportGenerateResponse(
         export_id=export_id,
@@ -192,8 +191,8 @@ def download_export(
 
 
 class PushGithubRequest(BaseModel):
-    branch: Optional[str] = None
-    commit_message: Optional[str] = None
+    branch: str | None = None
+    commit_message: str | None = None
 
 
 @admin_export_router.post("/{export_id}/push-github")
@@ -202,6 +201,7 @@ def push_github(
     body: PushGithubRequest,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
+    _primary: None = Depends(require_primary_db),
 ) -> dict:
     """Queue an async push of the export (JSON + static site) to GitHub."""
     record = _EXPORTS.get(export_id)
