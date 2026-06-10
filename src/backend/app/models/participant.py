@@ -19,6 +19,8 @@ class Participant(Base):
     affiliation: Mapped[str | None] = mapped_column(String, nullable=True)
     links_json: Mapped[str | None] = mapped_column(String, nullable=True)  # JSON string
     invite_code: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)  # For teams
+    # Public crest/portrait served at /uploads/* (seeded art or a member's portrait)
+    image: Mapped[str | None] = mapped_column(String, nullable=True)
     is_waiting: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")  # active|disabled|banned
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

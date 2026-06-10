@@ -29,6 +29,7 @@ interface PRow {
   imageVariant: 'sprout' | 'lattice' | 'nucleus' | 'bloom';
   waitlist: boolean;
   imageSeed: string;
+  imageSrc?: string;
 }
 
 export default function ParticipantsPage() {
@@ -57,6 +58,7 @@ export default function ParticipantsPage() {
         kind: p.type,
         affiliation: p.affiliation ?? undefined,
         imageVariant: p.type === 'team' ? 'nucleus' : p.type === 'agent' ? 'lattice' : 'sprout',
+        imageSrc: p.image ?? undefined,
         waitlist: !!p.is_waiting,
         imageSeed: p.display_name,
       }))
@@ -152,6 +154,7 @@ export default function ParticipantsPage() {
                 >
                   <DitheredImage
                     seed={p.imageSeed}
+                    src={p.imageSrc}
                     variant={p.imageVariant}
                     alt={p.displayName}
                     className="w-12 h-12 shrink-0"
@@ -196,6 +199,7 @@ function ParticipantCard({ p }: { p: PRow }) {
         <div className="flex">
           <DitheredImage
             seed={p.imageSeed}
+            src={p.imageSrc}
             variant={p.imageVariant}
             alt={p.displayName}
             className="w-24 h-24 shrink-0"

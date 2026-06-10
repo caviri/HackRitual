@@ -47,8 +47,22 @@ class ParticipantPublicResponse(BaseModel):
     affiliation: str | None = None
     status: str
     is_waiting: bool = False
+    image: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class RelatedProject(BaseModel):
+    id: str
+    title: str
+    status: str
+    track_id: str | None = None
+
+
+class RelatedTeam(BaseModel):
+    id: str
+    display_name: str
+    role_in_team: str
 
 
 class TeamMemberPublic(BaseModel):
@@ -59,6 +73,15 @@ class TeamMemberPublic(BaseModel):
 
 
 class TeamPublicResponse(ParticipantPublicResponse):
+    members: list[TeamMemberPublic] = Field(default_factory=list)
+
+
+class ParticipantDetailResponse(ParticipantPublicResponse):
+    """Public detail: the participant plus what it is bound to — the projects
+    it proposed, the teams its people belong to, and (for teams) the roster."""
+
+    projects: list[RelatedProject] = Field(default_factory=list)
+    teams: list[RelatedTeam] = Field(default_factory=list)
     members: list[TeamMemberPublic] = Field(default_factory=list)
 
 

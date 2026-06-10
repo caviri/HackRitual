@@ -783,3 +783,39 @@ async def test_public_team_roster_carries_members_without_secrets(client):
     blob = resp.text
     assert "invite_code" not in blob
     assert "@demo.rite" not in blob
+
+
+@pytest.mark.anyio
+async def test_participant_detail_carries_relations_and_image(client):
+    """Detail endpoint binds a participant to its projects, teams, and crest."""
+    from app.database import SessionLocal
+    from app.models.participant import Participant
+    from app.services.seeder import seed_fixtures
+
+    with SessionLocal() as db:
+        seed_fixtures(db)
+        ada = (
+            db.query(Participant)
+            .filter(Participant.display_name == "Ada Cole", Participant.type == "human")
+            .first()
+        )
+        owls = (
+            db.query(Participant)
+            .filter(Participant.display_name == "the_owls", Participant.type == "team")
+            .first()
+        )
+
+    detail = await client.get(f"/api/participants/{ada.id}")
+    assert detail.status_code == 200
+    body = detail.json()
+    assert body["image"] and body["image"].startswith("/uploads/")
+    team_names = {t["display_name"] for t in body["teams"]}
+    assert "the_owls" in team_names
+    project_titles = {p["title"] for p in body["projects"]}
+    assert "kombu-cache" in project_titles  # Ada proposed it
+
+    team_detail = await client.get(f"/api/participants/{owls.id}")
+    tbody = team_detail.json()
+    assert tbody["image"] and tbody["image"].startswith("/uploads/")
+    assert {m["display_name"] for m in tbody["members"]} >= {"June K.", "Ada Cole"}
+    assert any(p["title"] == "mycelium-mesh" for p in tbody["projects"])

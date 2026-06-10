@@ -471,6 +471,7 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
         "members_created": 0,
         "portraits_created": 0,
         "project_images_created": 0,
+        "participant_images_created": 0,
         "files_created": 0,
         "scores_created": 0,
         "applications_created": 0,
@@ -730,6 +731,42 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
         user.portrait_brightness = 0
         user.portrait_scale = 0.4
         counts["portraits_created"] += 1
+
+    # ── Participant crests ── (humans wear their user's portrait; agents and
+    # teams get generated crests, motif by kind)
+    _PARTICIPANT_MOTIF = {"team": "nucleus", "agent": "lattice", "human": "sprout"}
+    email_by_name = {u["name"]: u["email"] for u in _user_data()}
+    for pdata in _participant_data():
+        participant = participant_by_name.get(pdata["display_name"])
+        if participant is None:
+            continue
+        have_image = bool(
+            participant.image
+            and participant.image.startswith("/uploads/")
+            and (upload_root / participant.image[len("/uploads/"):]).exists()
+        )
+        if have_image or (participant.image and not participant.image.startswith("/uploads/")):
+            continue
+        portrait_owner = (
+            user_by_email.get(email_by_name.get(pdata["display_name"], ""))
+            if pdata["type"] == "human"
+            else None
+        )
+        if portrait_owner is not None and portrait_owner.portrait_path:
+            participant.image = f"/uploads/{portrait_owner.portrait_path}"
+        else:
+            crest = demo_art.generate_processed_art(
+                f"participant:{pdata['display_name']}",
+                _PARTICIPANT_MOTIF.get(pdata["type"], "sprout"),
+                size=(480, 480),
+            )
+            slug = re.sub(r"[^a-z0-9-]+", "-", pdata["display_name"].lower()).strip("-")
+            crest_dir = upload_root / "participants" / slug
+            crest_dir.mkdir(parents=True, exist_ok=True)
+            crest_path = crest_dir / f"crest-{hashlib.sha256(crest).hexdigest()[:12]}.png"
+            crest_path.write_bytes(crest)
+            participant.image = f"/uploads/{crest_path.relative_to(upload_root).as_posix()}"
+        counts["participant_images_created"] += 1
 
     # ── Project covers ──
     for proj in _project_data():
