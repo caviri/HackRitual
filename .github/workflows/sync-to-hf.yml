@@ -60,6 +60,16 @@ jobs:
           git checkout --orphan hf-deploy
           git add -A
           git commit -q -m "Deploy snapshot from ${GITHUB_SHA}"
-          git push --force \
-            "https://katospiegel:${HF_TOKEN}@huggingface.co/spaces/katospiegel/HackRitual" \
-            hf-deploy:main
+          # HF rate-limits git pushes (HTTP 429) after frequent deploys; back
+          # off and retry instead of failing the whole sync.
+          for wait in 0 60 180 420 600; do
+            sleep "$wait"
+            if git push --force \
+              "https://katospiegel:${HF_TOKEN}@huggingface.co/spaces/katospiegel/HackRitual" \
+              hf-deploy:main; then
+              exit 0
+            fi
+            echo "push failed — retrying after backoff"
+          done
+          echo "::error::HF push still failing after retries (likely rate-limited)"
+          exit 1
