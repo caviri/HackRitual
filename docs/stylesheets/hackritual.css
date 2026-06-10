@@ -1,0 +1,194 @@
+/* ============================================================ *
+ * HackRitual docs — hacker-solarpunk skin for MkDocs Material   *
+ *                                                               *
+ * Mirrors src/frontend/src/styles/themes/hacker-solarpunk.css:  *
+ * a terminal that grew lichens. Soil blacks, moss green action, *
+ * bioluminescent teal sparingly, ash text. EB Garamond carries  *
+ * the headings; IBM Plex Mono carries the machinery.            *
+ * ============================================================ */
+
+:root,
+[data-md-color-scheme="slate"] {
+  /* soil — surface stack */
+  --hr-soil-950: #050603;
+  --hr-soil-900: #0a0c07;
+  --hr-soil-800: #11140d;
+  --hr-soil-700: #1a1e14;
+
+  /* moss — primary */
+  --hr-moss-300: #9bb37a;
+  --hr-moss-400: #7c9858;
+  --hr-moss-700: #4a6234;
+  --hr-moss-900: #1a2410;
+
+  /* bioluminescence — emphasis only */
+  --hr-bio-400: #5cd9c5;
+
+  /* mycelium — warm ochre */
+  --hr-mycelium-500: #b8842f;
+
+  /* ash — text */
+  --hr-ash-100: #f1f1e8;
+  --hr-ash-300: #babcae;
+  --hr-ash-500: #8a8f78;
+  --hr-ash-700: #545848;
+
+  /* ── Material token overrides ── */
+  --md-default-bg-color: var(--hr-soil-950);
+  --md-default-fg-color: var(--hr-ash-100);
+  --md-default-fg-color--light: var(--hr-ash-300);
+  --md-default-fg-color--lighter: var(--hr-ash-500);
+  --md-default-fg-color--lightest: var(--hr-soil-700);
+
+  --md-primary-fg-color: var(--hr-soil-900);
+  --md-primary-bg-color: var(--hr-ash-100);
+  --md-accent-fg-color: var(--hr-bio-400);
+
+  --md-typeset-color: var(--hr-ash-300);
+  --md-typeset-a-color: var(--hr-moss-300);
+
+  --md-code-bg-color: var(--hr-soil-800);
+  --md-code-fg-color: var(--hr-moss-300);
+
+  --md-typeset-table-color: var(--hr-moss-900);
+
+  --md-footer-bg-color: var(--hr-soil-900);
+  --md-footer-bg-color--dark: var(--hr-soil-950);
+  --md-footer-fg-color: var(--hr-ash-300);
+  --md-footer-fg-color--light: var(--hr-ash-500);
+}
+
+/* ───── chrome: header, tabs, sidebar ───── */
+.md-header,
+.md-tabs {
+  background-color: var(--hr-soil-900);
+  color: var(--hr-ash-100);
+  border-bottom: 1px solid var(--hr-moss-900);
+}
+
+.md-header__title,
+.md-header__topic {
+  font-family: "EB Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.md-nav__title {
+  color: var(--hr-ash-500);
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.62rem;
+  background: transparent !important;
+}
+
+.md-nav__item .md-nav__link--active,
+.md-nav__link:focus,
+.md-nav__link:hover {
+  color: var(--hr-moss-300);
+}
+
+/* ───── typography ───── */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-family: "EB Garamond", Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  color: var(--hr-ash-100);
+}
+
+.md-typeset h1 {
+  color: var(--hr-moss-300);
+}
+
+.md-typeset h2 {
+  border-bottom: 1px solid var(--hr-moss-900);
+  padding-bottom: 0.25em;
+}
+
+.md-typeset a:hover {
+  color: var(--hr-bio-400);
+}
+
+/* the epigraph blockquotes that open each page */
+.md-typeset blockquote {
+  border-left: 2px solid var(--hr-moss-700);
+  color: var(--hr-ash-500);
+  font-family: "EB Garamond", Georgia, serif;
+  font-style: italic;
+  font-size: 1.05em;
+}
+
+/* ───── code: the machinery speaks mono ───── */
+.md-typeset code,
+.md-typeset pre > code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78em;
+}
+
+.md-typeset pre > code {
+  border: 1px solid var(--hr-moss-900);
+  border-radius: 0;
+}
+
+/* ───── tables: ruled like the ascii frames ───── */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--hr-moss-900);
+  border-radius: 0;
+  background: var(--hr-soil-900);
+}
+
+.md-typeset table:not([class]) th {
+  background: var(--hr-soil-800);
+  color: var(--hr-moss-300);
+  font-family: "IBM Plex Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+}
+
+.md-typeset table:not([class]) td {
+  border-top: 1px solid var(--hr-soil-700);
+}
+
+/* ───── search ───── */
+.md-search__form {
+  background-color: var(--hr-soil-800);
+  border-radius: 0;
+}
+
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+  background-color: var(--hr-soil-800);
+}
+
+.md-search__output {
+  background-color: var(--hr-soil-900);
+}
+
+/* ───── buttons / admonitions keep the square, ruled look ───── */
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 0;
+  border-color: var(--hr-moss-700);
+  background: var(--hr-soil-900);
+}
+
+.md-typeset .admonition-title {
+  background: var(--hr-soil-800) !important;
+}
+
+/* warm glyph for top-level hr rules */
+.md-typeset hr {
+  border-bottom: 1px solid var(--hr-moss-900);
+}
+
+/* faint grain to match the app's atmosphere */
+.md-container {
+  background-image: radial-gradient(
+    ellipse at center,
+    transparent 55%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+}

@@ -8,14 +8,21 @@ theme:
     - scheme: slate
       primary: green
       accent: lime
+  font:
+    text: EB Garamond
+    code: IBM Plex Mono
   features:
     - navigation.sections
     - navigation.top
     - content.code.copy
     - search.suggest
 
+extra_css:
+  - stylesheets/hackritual.css
+
 nav:
   - Home: index.md
+  - Live demo ↗: https://katospiegel-hackritual.hf.space/
   - Architecture: architecture.md
   - Event lifecycle: event-lifecycle.md
   - Data model: data-model.md
