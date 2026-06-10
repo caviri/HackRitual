@@ -48,6 +48,92 @@ PROFILES: dict[str, SeedProfile] = {
 }
 
 
+# The chronicle each snapshot carries — what the audit log would hold if the
+# ritual had genuinely walked to that stage. (minutes offset from event start,
+# action, target_type, metadata). Stages are cumulative: FROZEN includes
+# OPEN's history, and so on.
+_CHRONICLE: dict[str, list[tuple[int, str, str | None, dict | None]]] = {
+    "DRAFT": [
+        (-2880, "event.created", "event", {"state": "DRAFT"}),
+        (-2870, "event.config_updated", "event", {"fields": ["tracks", "submission_limit_per_participant"]}),
+        (-2860, "page.published", "page", {"title": "The Rites"}),
+        (-2855, "page.published", "page", {"title": "The Rules"}),
+        (-1440, "application.received", "application", {"name": "Nadia Fern"}),
+        (-1380, "application.received", "application", {"name": "Tomas Reyes"}),
+        (-1320, "application.received", "application", {"name": "Priya Anand"}),
+        (-1260, "application.rejected", "application", {"name": "Vik Marsh", "reason": "off-theme"}),
+        (-720, "participant.reserved", "participant", {"handle": "Ada Cole", "waitlist": True}),
+        (-700, "participant.reserved", "participant", {"handle": "June K.", "waitlist": True}),
+    ],
+    "OPEN": [
+        (0, "event.transition", "event", {"from": "DRAFT", "to": "OPEN", "by": "the keeper"}),
+        (12, "participant.registered", "participant", {"handle": "Ada Cole"}),
+        (15, "participant.registered", "participant", {"handle": "June K."}),
+        (22, "team.formed", "participant", {"handle": "the_owls", "captain": "June K."}),
+        (30, "agent.created", "agent", {"name": "marrowbot"}),
+        (45, "project.proposed", "project", {"title": "mycelium-mesh", "track": "data-science"}),
+        (52, "project.proposed", "project", {"title": "photosym-os", "track": "research-infra"}),
+        (60, "project.approved", "project", {"title": "mycelium-mesh"}),
+        (95, "submission.offered", "submission", {"project": "mycelium-mesh", "version": 1}),
+        (140, "submission.offered", "submission", {"project": "lichen-loom", "version": 1}),
+        (180, "submission.withdrawn", "submission", {"project": "the_meadow_ide", "version": 1}),
+        (220, "submission.offered", "submission", {"project": "spore-print", "version": 1}),
+    ],
+    "FROZEN": [
+        (1440, "event.transition", "event", {"from": "OPEN", "to": "FROZEN", "by": "the keeper"}),
+        (1442, "submission.finalised", "submission", {"project": "mycelium-mesh", "version": 3}),
+        (1444, "submission.finalised", "submission", {"project": "rhizome-rpc", "version": 1}),
+        (1446, "submission.finalised", "submission", {"project": "photosym-os", "version": 2}),
+        (1448, "submission.finalised", "submission", {"project": "lichen-loom", "version": 2}),
+        (1460, "score.rendered", "score", {"project": "mycelium-mesh", "value": 90.0, "scorer": "default-1.0"}),
+        (1461, "score.rendered", "score", {"project": "rhizome-rpc", "value": 80.0, "scorer": "default-1.0"}),
+        (1462, "score.rendered", "score", {"project": "photosym-os", "value": 60.0, "scorer": "default-1.0"}),
+        (1463, "score.rendered", "score", {"project": "lichen-loom", "value": 50.0, "scorer": "default-1.0"}),
+    ],
+    "FINAL": [
+        (1700, "event.transition", "event", {"from": "FROZEN", "to": "FINAL", "by": "the keeper"}),
+        (1701, "verdict.inscribed", "event", {"first": "the_owls / mycelium-mesh", "second": "the_owls / rhizome-rpc", "third": "photosym-duo / photosym-os"}),
+        (1705, "leaderboard.published", "event", None),
+    ],
+    "ARCHIVED": [
+        (2100, "event.transition", "event", {"from": "FINAL", "to": "ARCHIVED", "by": "the keeper"}),
+        (2110, "export.sealed", "export", {"files": 14, "redaction": "public"}),
+        (2115, "record.closed", "event", {"note": "the ritual is complete"}),
+    ],
+}
+
+# Cumulative history per stage: each stage carries its predecessors' entries.
+_STAGE_HISTORY = {
+    "DRAFT": ["DRAFT"],
+    "OPEN": ["DRAFT", "OPEN"],
+    "FROZEN": ["DRAFT", "OPEN", "FROZEN"],
+    "FINAL": ["DRAFT", "OPEN", "FROZEN", "FINAL"],
+    "ARCHIVED": ["DRAFT", "OPEN", "FROZEN", "FINAL", "ARCHIVED"],
+}
+
+
+def _seed_chronicle(db, stage: str) -> None:
+    """Write the stage's narrative into the audit log (deterministic times,
+    anchored to the event window). Flushes; caller commits."""
+    import json
+    from datetime import timedelta
+
+    from app.models.audit_log import AuditLog
+
+    anchor = settings.event_start.replace(tzinfo=None)
+    for chapter in _STAGE_HISTORY[stage]:
+        for minutes, action, target_type, metadata in _CHRONICLE[chapter]:
+            db.add(
+                AuditLog(
+                    action=action,
+                    target_type=target_type,
+                    metadata_json=json.dumps(metadata) if metadata else None,
+                    created_at=anchor + timedelta(minutes=minutes),
+                )
+            )
+    db.flush()
+
+
 def build_stage(stage: str, force: bool = False) -> bool:
     """Create (or with force, recreate) one stage snapshot.
 
@@ -90,6 +176,7 @@ def build_stage(stage: str, force: bool = False) -> bool:
         db.flush()
         seed_admin_users(db)
         counts = seed_fixtures(db, PROFILES[stage])
+        _seed_chronicle(db, stage)
         db.commit()
 
     logger.info(

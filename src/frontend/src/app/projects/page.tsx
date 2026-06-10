@@ -7,6 +7,7 @@ import { DitheredImage } from '../../components/dithered-image';
 import { useStage } from '../../lib/use-stage';
 import {
   api,
+  backendPresent,
   type ParticipantDTO,
   type ProjectDTO,
   type TrackDTO,
@@ -32,40 +33,47 @@ interface ProjectRow {
 export default function ProjectsPage() {
   const data = useStage();
   const [track, setTrack] = useState<string | null>(null);
+  const [live, setLive] = useState<boolean | null>(null);
   const [real, setReal] = useState<{
     projects: ProjectDTO[];
     tracks: TrackDTO[];
     participants: ParticipantDTO[];
-  } | null>(null);
+  }>({ projects: [], tracks: [], participants: [] });
 
   useEffect(() => {
     const url = new URL(window.location.href);
     setTrack(url.searchParams.get('track'));
-    void Promise.all([
-      api.projects(),
-      api.tracks(),
-      api.participants(),
-    ]).then(([projects, tracks, participants]) => {
-      if (projects.length > 0) setReal({ projects, tracks, participants });
+    void backendPresent().then(async (ok) => {
+      if (ok) {
+        const [projects, tracks, participants] = await Promise.all([
+          api.projects(),
+          api.tracks(),
+          api.participants(),
+        ]);
+        setReal({ projects, tracks, participants });
+      }
+      setLive(ok);
     });
   }, []);
 
-  // ── Filter chips: take real tracks if we have any, else stage's mocks
-  const filterChips =
-    real && real.tracks.length > 0
-      ? real.tracks.map((t) => ({
-          name: t.name,
-          glyph: '◆',
-          count: real.projects.filter((p) => p.track_id === t.id).length,
-        }))
-      : data.tracks.map((t) => ({
-          name: t.name,
-          glyph: t.glyph,
-          count: t.count,
-        }));
+  // live !== false → API data (even when empty); mocks only when backend absent
+  const useLive = live !== false;
+
+  // ── Filter chips: live tracks (counts from live projects) or stage's mocks
+  const filterChips = useLive
+    ? real.tracks.map((t) => ({
+        name: t.name,
+        glyph: '◆',
+        count: real.projects.filter((p) => p.track_id === t.id).length,
+      }))
+    : data.tracks.map((t) => ({
+        name: t.name,
+        glyph: t.glyph,
+        count: t.count,
+      }));
 
   // ── Build display rows
-  const rows: ProjectRow[] = real
+  const rows: ProjectRow[] = useLive
     ? real.projects
         .map((p) => ({
           key: p.id,
@@ -114,7 +122,7 @@ export default function ProjectsPage() {
         title="Projects"
         subtitle={stageSubtitle}
         chip={
-          real
+          live === true
             ? `${filtered.length} of ${rows.length} · live`
             : `${filtered.length} of ${rows.length}`
         }

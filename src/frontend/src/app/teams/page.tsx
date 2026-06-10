@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../../components/page-header';
 import { DitheredImage } from '../../components/dithered-image';
 import { useStage } from '../../lib/use-stage';
-import { api, type ParticipantDTO } from '../../lib/api';
+import { api, backendPresent, type ParticipantDTO } from '../../lib/api';
 
 interface TeamRow {
   key: string;
@@ -21,16 +21,23 @@ interface TeamRow {
 
 export default function TeamsPage() {
   const data = useStage();
-  const [real, setReal] = useState<ParticipantDTO[] | null>(null);
+  const [live, setLive] = useState<boolean | null>(null);
+  const [real, setReal] = useState<ParticipantDTO[]>([]);
 
   useEffect(() => {
-    void api.participants().then((all) => {
-      const teams = all.filter((p) => p.type === 'team');
-      if (teams.length > 0) setReal(teams);
+    void backendPresent().then(async (ok) => {
+      if (ok) {
+        const all = await api.participants();
+        setReal(all.filter((p) => p.type === 'team'));
+      }
+      setLive(ok);
     });
   }, []);
 
-  const rows: TeamRow[] = real
+  // live !== false → API data (even when empty); mocks only when backend absent
+  const useLive = live !== false;
+
+  const rows: TeamRow[] = useLive
     ? real.map((t) => ({
         key: t.id,
         href: `/team/?id=${t.id}`,
@@ -66,7 +73,7 @@ export default function TeamsPage() {
         prompt="ritual.teams()"
         title="Teams"
         subtitle={subtitle}
-        chip={real ? `${rows.length} live` : `${rows.length} formed`}
+        chip={live === true ? `${rows.length} live` : `${rows.length} formed`}
       />
 
       <section className="mx-auto w-full max-w-6xl px-6 py-12">
