@@ -21,6 +21,7 @@ from app.models.user import User
 from app.schemas.leaderboard import (
     LeaderboardEntry,
     LeaderboardParticipant,
+    LeaderboardProject,
     LeaderboardResponse,
 )
 from app.schemas.scores import ScoreCreate, ScoreOverride, ScoreResponse
@@ -28,7 +29,6 @@ from app.services.audit import log_action
 from app.services.event import get_event, load_config
 from app.services.leaderboard import build_leaderboard
 from app.services.scoring_service import active_score, score_submission
-
 
 router = APIRouter(prefix="/api/submissions", tags=["scores"])
 
@@ -256,6 +256,11 @@ def get_leaderboard(
             score=r.score,
             submission_count=r.submission_count,
             last_submission_at=r.last_submission_at,
+            project=LeaderboardProject(
+                id=r.project.id, title=r.project.title, track_id=r.project.track_id
+            )
+            if r.project
+            else None,
         )
         for i, r in enumerate(rows)
     ]

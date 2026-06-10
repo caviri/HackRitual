@@ -211,7 +211,14 @@ export interface LeaderboardParticipantDTO {
   type: 'human' | 'agent' | 'team';
 }
 
+export interface LeaderboardProjectDTO {
+  id: string;
+  title: string;
+  track_id: string | null;
+}
+
 export interface LeaderboardEntryDTO {
+  project?: LeaderboardProjectDTO | null;
   rank: number;
   participant: LeaderboardParticipantDTO;
   score: number;

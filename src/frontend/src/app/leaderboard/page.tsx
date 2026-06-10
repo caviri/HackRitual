@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '../../components/page-header';
 import { api, type LeaderboardDTO, type MeDTO } from '../../lib/api';
 
@@ -86,7 +87,8 @@ export default function LeaderboardPage() {
                 <tr className="text-[0.66rem] uppercase tracking-widest text-fg-dim">
                   <th className="text-right p-3 font-normal w-16">rank</th>
                   <th className="text-left p-3 font-normal">participant</th>
-                  <th className="text-right p-3 font-normal">subs</th>
+                  <th className="text-left p-3 font-normal">project</th>
+                  <th className="text-right p-3 font-normal">offers</th>
                   <th className="text-right p-3 font-normal">score</th>
                 </tr>
               </thead>
@@ -109,11 +111,28 @@ export default function LeaderboardPage() {
                         <span className="mr-2 text-fg-dim" aria-hidden>
                           {TYPE_GLYPH[e.participant.type] ?? '•'}
                         </span>
-                        <span className="text-fg">{e.participant.display_name}</span>
+                        <Link
+                          href={`/participant/?id=${e.participant.id}`}
+                          className="text-fg hover:text-primary transition-colors"
+                        >
+                          {e.participant.display_name}
+                        </Link>
                         {mine && (
                           <span className="ml-2 text-[0.62rem] uppercase tracking-widest text-primary">
                             you
                           </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {e.project ? (
+                          <Link
+                            href={`/project/?id=${e.project.id}`}
+                            className="text-fg-muted hover:text-primary transition-colors"
+                          >
+                            {e.project.title}
+                          </Link>
+                        ) : (
+                          <span className="text-fg-dim">—</span>
                         )}
                       </td>
                       <td className="p-3 text-right text-fg-dim tabular-nums">

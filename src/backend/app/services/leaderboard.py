@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -30,10 +29,12 @@ class LeaderboardRow:
     participant: Participant
     score: float
     submission_count: int
-    last_submission_at: Optional[datetime]
+    last_submission_at: datetime | None
+    # The project behind the headline score (best/latest scored submission).
+    project: Project | None = None
 
 
-def _best_scored_value(db: Session, submission_id: str) -> Optional[float]:
+def _best_scored_value(db: Session, submission_id: str) -> float | None:
     """Highest `scored` value recorded against a submission, if any."""
     rows = (
         db.query(Score.score_value)
@@ -48,7 +49,7 @@ def build_leaderboard(
     db: Session,
     event_id: str,
     mode: str = "best",
-    track_id: Optional[str] = None,
+    track_id: str | None = None,
     limit: int = 50,
 ) -> list[LeaderboardRow]:
     """Compute the ranked standing for an event.
@@ -86,10 +87,11 @@ def build_leaderboard(
             continue
 
         if mode == "latest":
-            latest = max(scored, key=lambda sv: sv[0].created_at or datetime.min)
-            headline = latest[1]
+            headline_sub, headline = max(
+                scored, key=lambda sv: sv[0].created_at or datetime.min
+            )
         else:  # best
-            headline = max(v for _, v in scored)
+            headline_sub, headline = max(scored, key=lambda sv: sv[1])
 
         rows.append(
             LeaderboardRow(
@@ -99,6 +101,9 @@ def build_leaderboard(
                 last_submission_at=max(
                     (s.created_at for s in subs if s.created_at), default=None
                 ),
+                project=db.get(Project, headline_sub.project_id)
+                if headline_sub.project_id
+                else None,
             )
         )
 

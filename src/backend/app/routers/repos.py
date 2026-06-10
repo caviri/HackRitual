@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -17,9 +16,22 @@ from app.schemas.repos import (
     RepositoryResponse,
 )
 from app.services import repos as repo_service
-
+from app.services.submissions import participant_ids_for_actor
 
 router = APIRouter(prefix="/api/projects", tags=["repositories"])
+
+
+def _require_project_member(db: Session, actor: Actor, project: Project) -> None:
+    """Only the proposing participant's people (or an admin) may modify a
+    project's repository links — anyone could attach to any project before."""
+    if actor.is_admin:
+        return
+    if project.proposed_by_participant_id in participant_ids_for_actor(db, actor):
+        return
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        "only the project's own participant (or the keeper) may change its repositories",
+    )
 
 
 def _commit_to_response(c: RepoCommit) -> CommitResponse:
@@ -103,6 +115,7 @@ async def attach_repo(
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+    _require_project_member(db, actor, project)
 
     parsed = repo_service.parse_url(body.url)
     if not parsed:
@@ -167,6 +180,9 @@ def detach_repo(
     repo = db.get(Repository, repo_id)
     if not repo or repo.project_id != project_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "repository not found")
+    project = db.get(Project, project_id)
+    if project is not None:
+        _require_project_member(db, actor, project)
     db.delete(repo)
     db.commit()
 

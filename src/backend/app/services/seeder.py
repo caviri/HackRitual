@@ -198,20 +198,53 @@ def _application_data() -> list[dict]:
     ]
 
 
-def _announcement_data() -> list[dict]:
-    return [
-        {
-            "title": "The circle is drawn",
-            "body": "Tracks are inscribed, the rules are bound, and the petition desk "
-            "is open. If you hold no key yet, file at /apply/ — the keeper reads "
-            "every petition by hand.",
-        },
-        {
-            "title": "Agents are welcome this rite",
-            "body": "The agent policy is set to allowed. Mint a key from your profile, "
-            "name your bot, and it competes as a participant in its own right.",
-        },
-    ]
+def _announcement_data() -> dict[str, list[dict]]:
+    """Dispatches keyed by the stage that publishes them — cumulative, so a
+    FROZEN snapshot carries DRAFT's and OPEN's history too."""
+    return {
+        "DRAFT": [
+            {
+                "title": "The circle is drawn",
+                "body": "Tracks are inscribed, the rules are bound, and the petition desk "
+                "is open. If you hold no key yet, file at /apply/ — the keeper reads "
+                "every petition by hand.",
+            },
+        ],
+        "OPEN": [
+            {
+                "title": "The gates are open",
+                "body": "Step in with your key, claim your seat, and propose. The forge "
+                "accepts offerings until the appointed hour — versioned, so offer "
+                "early and offer again.",
+            },
+            {
+                "title": "Agents are welcome this rite",
+                "body": "The agent policy is set to allowed. Mint a key from your profile, "
+                "name your bot, and it competes as a participant in its own right.",
+            },
+        ],
+        "FROZEN": [
+            {
+                "title": "The forge is sealed",
+                "body": "No further offerings. The judges have convened and the scorer "
+                "is rendering its first verdicts — watch the leaderboard settle.",
+            },
+        ],
+        "FINAL": [
+            {
+                "title": "The verdict is inscribed",
+                "body": "The named are named. Read the standing on the leaderboard; "
+                "every mark and override sits in the audit log.",
+            },
+        ],
+        "ARCHIVED": [
+            {
+                "title": "The record is sealed",
+                "body": "The ritual is complete. Take the artefact from the export desk; "
+                "nothing further will be written here.",
+            },
+        ],
+    }
 
 
 def _page_data() -> list[dict]:
@@ -414,6 +447,10 @@ class SeedProfile:
     submission_statuses: frozenset = frozenset({"draft", "final", "withdrawn"})
     include_scores: bool = True
     force_waiting: bool = False
+    # Once the gates open, the keeper has read the petitions: approve most.
+    decide_applications: bool = False
+    # Which dispatches to publish (keys into _announcement_data sets).
+    announcement_stages: tuple = ("DRAFT", "OPEN")
 
 
 FULL_PROFILE = SeedProfile()
@@ -863,10 +900,15 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
         score_submission(db, submission.id, scorer=scorer)
         counts["scores_created"] += 1
 
-    # ── Announcements ── (dispatches under the homepage hero)
+    # ── Announcements ── (dispatches under the homepage hero; cumulative
+    # per stage so later snapshots carry the whole story)
     from app.models.announcement import Announcement
 
-    for a in _announcement_data():
+    announcement_sets = _announcement_data()
+    selected_announcements = [
+        a for key in profile.announcement_stages for a in announcement_sets.get(key, [])
+    ]
+    for a in selected_announcements:
         existing_news = (
             db.query(Announcement)
             .filter(
@@ -887,9 +929,31 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
         )
         counts["announcements_created"] += 1
 
-    # ── Applications ── (the petition desk gets a queue to demo)
+    # ── Applications ── (the petition desk gets a queue to demo; once the
+    # gates are open the keeper has decided most of them)
+    decided_emails = {"nadia@petition.rite", "tomas@petition.rite", "priya@petition.rite"}
     for a in _application_data():
         if db.query(Application).filter(Application.email == a["email"]).first():
+            continue
+        if (
+            profile.decide_applications
+            and a["status"] == "pending"
+            and a["email"] in decided_emails
+        ):
+            from app.services.applications import approve_application
+
+            pending = Application(
+                name=a["name"],
+                email=a["email"],
+                team=a["team"],
+                project_interest=a["interest"],
+                status="pending",
+                source="form",
+            )
+            db.add(pending)
+            db.flush()
+            approve_application(db, pending)
+            counts["applications_created"] += 1
             continue
         row = Application(
             name=a["name"],
