@@ -5,7 +5,13 @@ import { useEffect, useState } from 'react';
 import { PageHeader } from '../../components/page-header';
 import { DitheredImage } from '../../components/dithered-image';
 import { useStage } from '../../lib/use-stage';
-import { api, backendPresent, type ParticipantDTO } from '../../lib/api';
+import {
+  api,
+  backendPresent,
+  type ProjectDTO,
+  type TeamDTO,
+  type TrackDTO,
+} from '../../lib/api';
 
 interface TeamRow {
   key: string;
@@ -22,13 +28,21 @@ interface TeamRow {
 export default function TeamsPage() {
   const data = useStage();
   const [live, setLive] = useState<boolean | null>(null);
-  const [real, setReal] = useState<ParticipantDTO[]>([]);
+  const [real, setReal] = useState<TeamDTO[]>([]);
+  const [projects, setProjects] = useState<ProjectDTO[]>([]);
+  const [tracks, setTracks] = useState<TrackDTO[]>([]);
 
   useEffect(() => {
     void backendPresent().then(async (ok) => {
       if (ok) {
-        const all = await api.participants();
-        setReal(all.filter((p) => p.type === 'team'));
+        const [teams, projectList, trackList] = await Promise.all([
+          api.teams(),
+          api.projects(),
+          api.tracks(),
+        ]);
+        setReal(teams);
+        setProjects(projectList);
+        setTracks(trackList);
       }
       setLive(ok);
     });
@@ -38,15 +52,31 @@ export default function TeamsPage() {
   const useLive = live !== false;
 
   const rows: TeamRow[] = useLive
-    ? real.map((t) => ({
-        key: t.id,
-        href: `/team/?id=${t.id}`,
-        name: t.display_name,
-        blurb: t.affiliation ?? 'a team in the circle',
-        members: [],
-        imageSeed: t.display_name,
-        imageVariant: 'nucleus',
-      }))
+    ? real.map((t) => {
+        const project = projects.find(
+          (p) => p.proposed_by_participant_id === t.id,
+        );
+        const track = project
+          ? tracks.find((tr) => tr.id === project.track_id)?.name
+          : undefined;
+        return {
+          key: t.id,
+          href: `/team/?id=${t.id}`,
+          name: t.display_name,
+          blurb: t.affiliation ?? 'a team in the circle',
+          members: t.members.map((m) => ({
+            handle: m.display_name,
+            kind: 'human' as const,
+            role: (m.role_in_team === 'captain' ? 'captain' : 'member') as
+              | 'captain'
+              | 'member',
+          })),
+          project: project?.title,
+          trackHint: track,
+          imageSeed: t.display_name,
+          imageVariant: 'nucleus' as const,
+        };
+      })
     : data.teams.map((t) => ({
         key: t.handle,
         href: `/teams/${t.handle}/`,
