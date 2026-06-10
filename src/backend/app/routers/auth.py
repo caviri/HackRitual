@@ -30,7 +30,6 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas.auth import MeResponse, RequestCodeInput, UserOut, VerifyCodeInput, VerifyCodeResponse
 from app.services import auth as auth_svc
-from app.services.email import send_login_code
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +84,6 @@ async def request_code(
     Always returns 204 — never reveals whether the email address exists.
     Rate-limited: 3 requests per email and 10 per IP per 15 minutes.
     """
-    from app.config import settings
-
     ip = _client_ip(request)
     email = str(data.email).lower().strip()
 
@@ -96,15 +93,8 @@ async def request_code(
             detail="Too many code requests. Wait a few minutes and try again.",
         )
 
-    raw_code, _ = auth_svc.create_login_code(email=email, db=db, request_ip=ip)
+    auth_svc.create_login_code(email=email, db=db, request_ip=ip)
     auth_svc.record_code_request(email, ip)
-
-    background_tasks.add_task(send_login_code, email, raw_code, settings.event_title)
-
-    from app.services import metrics_service
-
-    metrics_service.increment(db, "email_sent_count")
-    db.commit()
 
 
 # ------------------------------------------------------------------ #

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.models.task import Task
 
-TASK_TYPES = ("send_email", "score_submission", "export_bundle", "push_github")
+TASK_TYPES = ("score_submission", "export_bundle", "push_github")
 
 
 def enqueue(

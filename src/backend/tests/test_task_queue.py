@@ -85,8 +85,8 @@ class TestEnqueueClaim:
         from app.services import task_queue
 
         with SessionLocal() as db:
-            a = task_queue.enqueue(db, "send_email", payload={"n": 1})
-            b = task_queue.enqueue(db, "send_email", payload={"n": 2})
+            a = task_queue.enqueue(db, "export_bundle", payload={"n": 1})
+            b = task_queue.enqueue(db, "export_bundle", payload={"n": 2})
             assert a.status == "queued" and a.payload_json
 
             first = task_queue.claim_next(db)
@@ -102,7 +102,7 @@ class TestEnqueueClaim:
         from app.services import task_queue
 
         with SessionLocal() as db:
-            task_queue.enqueue(db, "send_email", delay_seconds=3600)
+            task_queue.enqueue(db, "export_bundle", delay_seconds=3600)
             # Nothing is due yet.
             assert task_queue.claim_next(db) is None
 
@@ -185,7 +185,7 @@ class TestRecovery:
         from app.services import task_queue
 
         with SessionLocal() as db:
-            task_queue.enqueue(db, "send_email")
+            task_queue.enqueue(db, "export_bundle")
             task = task_queue.claim_next(db)
             assert task.status == "running"
             task_id = task.id
@@ -221,7 +221,7 @@ class TestAdminQueue:
         from app.services import task_queue
 
         with SessionLocal() as db:
-            task_queue.enqueue(db, "send_email")
+            task_queue.enqueue(db, "export_bundle")
         resp = await client.get(
             "/api/admin/queue/status", headers=_headers(_admin_token())
         )
@@ -239,7 +239,7 @@ class TestAdminQueue:
 
         # Bury a task as dead directly.
         with SessionLocal() as db:
-            t = task_queue.enqueue(db, "send_email", max_attempts=1)
+            t = task_queue.enqueue(db, "export_bundle", max_attempts=1)
             t.status = "dead"
             t.last_error = "boom"
             t.completed_at = datetime.utcnow()
@@ -266,7 +266,7 @@ class TestAdminQueue:
         from app.services import task_queue
 
         with SessionLocal() as db:
-            t = task_queue.enqueue(db, "send_email")
+            t = task_queue.enqueue(db, "export_bundle")
             t.status = "done"
             t.completed_at = datetime.utcnow() - timedelta(hours=48)
             db.commit()

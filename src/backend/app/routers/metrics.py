@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.middleware.auth import require_admin
 from app.models.user import User
-from app.services import abuse_metrics, email_metrics, metrics_service
+from app.services import abuse_metrics, metrics_service
 
 admin_metrics_router = APIRouter(prefix="/api/admin/metrics", tags=["metrics"])
 privacy_router = APIRouter(prefix="/api", tags=["privacy"])
@@ -37,7 +37,6 @@ def metrics(
         "daily": metrics_service.get_daily(db, start, end),
         "totals": metrics_service.totals(db),
         "ephemeral": {
-            "email": email_metrics.snapshot(),
             "rate_limit": abuse_metrics.snapshot(),
         },
     }
@@ -60,7 +59,7 @@ def privacy() -> dict:
     """Structured statement of what HackRitual collects, and what it never does."""
     return {
         "collects": [
-            "Email address — for passwordless login and event notices.",
+            "Email address — for your account and so organizers can reach you.",
             "Display name and affiliation — provided voluntarily for your profile.",
             "Submissions — the work you offer during the event.",
             "An audit trail of consequential admin actions.",
@@ -75,12 +74,10 @@ def privacy() -> dict:
         },
         "ip_addresses": {
             "stored_in_db": False,
-            "login_codes": "hashed with a daily-rotating salt",
             "rate_limiting": "truncated (/24, /64), in-memory only, never logged",
         },
         "statistics": "aggregate only — no per-user analytics, no third-party trackers",
         "retention": {
-            "login_codes": "expire in 10 minutes; cleaned hourly",
             "sessions": "expire per JWT TTL; cleaned hourly",
             "rate_limit_data": "in-memory only; cleared on restart",
             "event_data": "until export or deletion",

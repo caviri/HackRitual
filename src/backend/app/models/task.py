@@ -13,7 +13,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    type: Mapped[str] = mapped_column(String, nullable=False)  # send_email|score_submission|export_bundle|push_github
+    type: Mapped[str] = mapped_column(String, nullable=False)  # score_submission|export_bundle|push_github
     ref_id: Mapped[str | None] = mapped_column(String, nullable=True)
     payload_json: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="queued")  # queued|running|done|failed|dead

@@ -12,10 +12,6 @@ def _make_settings(**overrides):
         "APP_BASE_URL": "http://localhost:7860",
         "JWT_SECRET": "testsecret",
         "ADMIN_SEED_EMAILS": "admin@test.local",
-        "SMTP_HOST": "smtp.test",
-        "SMTP_USER": "u",
-        "SMTP_PASS": "p",
-        "SMTP_FROM": "f@test.local",
         "EVENT_ID": "evt-1",
         "EVENT_TITLE": "Evt",
         "EVENT_START": "2026-01-01T09:00:00+00:00",
@@ -30,8 +26,6 @@ def _make_settings(**overrides):
 class TestSettingsValidation:
     def test_valid_config_loads(self):
         s = _make_settings()
-        # smtp_port has a default (587) and is not set in the session env
-        assert s.smtp_port == 587
         # event_id is set by the session env (test-event); just verify it's non-empty
         assert s.event_id
 

@@ -145,7 +145,7 @@ class TestExportBundle:
         with zipfile.ZipFile(io.BytesIO(payload)) as zf:
             blob = b" ".join(zf.read(n) for n in zf.namelist()).decode("utf-8")
 
-        for secret in ("api_key_hash", "JWT_SECRET", "SMTP_PASS", "jwt_secret"):
+        for secret in ("api_key_hash", "JWT_SECRET", "jwt_secret"):
             assert secret not in blob
 
     def test_deterministic_except_timestamp(self):

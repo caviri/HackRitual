@@ -311,7 +311,6 @@ def create_app() -> FastAPI:
         leaderboard_router,
     )
     from app.routers.logs import router as logs_router
-    from app.routers.email import admin_email_router
     from app.routers.queue import admin_queue_router
     from app.routers.abuse import admin_abuse_router
     from app.routers.scoring import admin_wasm_router, public_scoring_router
@@ -347,7 +346,6 @@ def create_app() -> FastAPI:
     app.include_router(admin_scores_router)
     app.include_router(leaderboard_router)
     app.include_router(logs_router)
-    app.include_router(admin_email_router)
     app.include_router(admin_queue_router)
     app.include_router(admin_abuse_router)
     app.include_router(admin_wasm_router)

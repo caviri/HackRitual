@@ -2,7 +2,7 @@
 Shared pytest fixtures.
 
 Sets up a temporary SQLite database and a minimal env for every test so
-tests never need a real .env file or real SMTP / JWT secrets.
+tests never need a real .env file or real JWT secrets.
 """
 
 from __future__ import annotations
@@ -20,10 +20,6 @@ MINIMAL_ENV = {
     "APP_BASE_URL": "http://localhost:7860",
     "JWT_SECRET": "test-secret-do-not-use-in-production",
     "ADMIN_SEED_EMAILS": "admin@test.local",
-    "SMTP_HOST": "localhost",
-    "SMTP_USER": "test",
-    "SMTP_PASS": "test",
-    "SMTP_FROM": "test@test.local",
     "EVENT_ID": "test-event",
     "EVENT_TITLE": "Test Event",
     "EVENT_START": "2026-01-01T09:00:00+00:00",

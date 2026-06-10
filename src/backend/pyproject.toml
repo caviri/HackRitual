@@ -24,8 +24,6 @@ dependencies = [
   # Auth
   "python-jose[cryptography]==3.3.0",
   "passlib[bcrypt]==1.7.4",
-  # Email
-  "aiosmtplib==3.0.2",
   # CLI (typer 0.15.x requires click<8.2 due to make_metavar API change)
   "typer==0.15.1",
   "click<8.2",

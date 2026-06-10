@@ -6,7 +6,6 @@ from typing import Optional
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File as FastAPIFile,
     HTTPException,
@@ -38,7 +37,6 @@ from app.schemas.projects import (
     SubmissionStatusUpdate,
     SubmissionUpdate,
 )
-from app.services import notifications
 from app.services import submissions as submission_rules
 from app.services.audit import log_action
 from app.services.event import get_event, load_config
@@ -176,7 +174,6 @@ def get_submission(submission_id: str, db: Session = Depends(get_db)) -> Submiss
 )
 def create_submission(
     body: SubmissionCreate,
-    background: BackgroundTasks,
     db: Session = Depends(get_db),
     actor: Actor = Depends(get_current_actor),
 ) -> Submission:
@@ -232,9 +229,6 @@ def create_submission(
     metrics_service.increment(db, "submissions_count")
     db.commit()
     db.refresh(sub)
-
-    # Acknowledge the offering to its participant (non-blocking, best-effort).
-    notifications.notify_submission_received(background, db, sub)
 
     return sub
 

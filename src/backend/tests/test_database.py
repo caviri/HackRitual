@@ -150,7 +150,7 @@ def test_task_crud(_set_env):
     from app.models.task import Task
 
     with SessionLocal() as db:
-        t = Task(type="send_email", ref_id="some-id")
+        t = Task(type="export_bundle", ref_id="some-id")
         db.add(t)
         db.commit()
         fetched = db.get(Task, t.id)

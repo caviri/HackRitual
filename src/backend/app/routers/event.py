@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -18,7 +18,6 @@ from app.middleware.auth import require_admin
 from app.models.audit_log import AuditLog
 from app.models.event import Event
 from app.models.user import User
-from app.services import notifications
 from app.schemas.event import (
     AuditEntry,
     EventConfig,
@@ -68,7 +67,6 @@ def get_event_info(db: Session = Depends(get_db)) -> EventResponse:
 @admin_router.post("/state", response_model=StateTransitionResponse)
 def transition_state(
     body: StateTransitionRequest,
-    background: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ) -> StateTransitionResponse:
@@ -93,9 +91,6 @@ def transition_state(
         },
     )
     db.commit()
-
-    # Tell the gathered the ritual has advanced (non-blocking, best-effort).
-    notifications.notify_phase_change(background, db, event)
 
     return StateTransitionResponse(
         id=event.id,

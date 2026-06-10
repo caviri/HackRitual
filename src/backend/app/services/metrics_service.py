@@ -21,7 +21,6 @@ COUNTER_FIELDS = {
     "submissions_count",
     "logins_count",
     "agent_submissions_count",
-    "email_sent_count",
     "rate_limit_triggered_count",
 }
 
@@ -65,7 +64,6 @@ def _as_dict(row: MetricsDaily) -> dict:
         "submissions": row.submissions_count,
         "logins": row.logins_count,
         "agent_submissions": row.agent_submissions_count,
-        "emails_sent": row.email_sent_count,
         "rate_limits_triggered": row.rate_limit_triggered_count,
         "scoring_avg_ms": round(row.scoring_avg_ms, 1),
         "scoring_max_ms": round(row.scoring_max_ms, 1),

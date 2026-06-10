@@ -222,8 +222,7 @@ async def _full_login(client, email: str) -> str:
 
 @pytest.mark.anyio
 async def test_request_code_returns_204(client):
-    with patch("app.routers.auth.send_login_code", new_callable=AsyncMock):
-        resp = await client.post("/api/auth/request-code", json={"email": "test@test.local"})
+    resp = await client.post("/api/auth/request-code", json={"email": "test@test.local"})
     assert resp.status_code == 204
 
 
@@ -240,13 +239,12 @@ async def test_request_code_rate_limited(client):
     key = f"req_code:email:{email}"
     svc._rate_buckets.pop(key, None)
 
-    with patch("app.routers.auth.send_login_code", new_callable=AsyncMock):
-        for _ in range(3):
-            r = await client.post("/api/auth/request-code", json={"email": email})
-            assert r.status_code == 204
-
-        # 4th request should be rate-limited
+    for _ in range(3):
         r = await client.post("/api/auth/request-code", json={"email": email})
+        assert r.status_code == 204
+
+    # 4th request should be rate-limited
+    r = await client.post("/api/auth/request-code", json={"email": email})
     assert r.status_code == 429
 
 

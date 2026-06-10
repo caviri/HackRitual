@@ -228,7 +228,6 @@ def simulate(
     table.add_row("scores overridden", str(report.scores_overridden))
     table.add_row("top score", str(report.top_score))
     table.add_row("artefact files", str(report.export_files))
-    table.add_row("notices sent", str(report.emails_sent))
     table.add_row("wards held", str(report.wards_held))
     table.add_row("audit entries", str(report.audit_entries))
     console.print()
@@ -244,7 +243,7 @@ def info() -> None:
     Print current configuration summary (non-secret fields only).
 
     Reads settings from the environment / .env file and displays them in
-    a table.  Secret values (JWT_SECRET, SMTP_PASS, GITHUB_TOKEN) are
+    a table.  Secret values (JWT_SECRET, GITHUB_TOKEN) are
     masked to avoid accidental exposure.
     """
     try:
@@ -268,11 +267,6 @@ def info() -> None:
         ("jwt_secret", _SECRET),
         ("jwt_algorithm", settings.jwt_algorithm),
         ("jwt_expire_minutes", str(settings.jwt_expire_minutes)),
-        ("smtp_host", settings.smtp_host),
-        ("smtp_port", str(settings.smtp_port)),
-        ("smtp_user", settings.smtp_user),
-        ("smtp_pass", _SECRET),
-        ("smtp_from", settings.smtp_from),
         ("event_id", settings.event_id),
         ("event_title", settings.event_title),
         ("event_type", settings.event_type),

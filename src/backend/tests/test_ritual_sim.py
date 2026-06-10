@@ -45,9 +45,6 @@ async def test_full_ritual_runs_to_archived(_create_tables):
     assert report.export_files >= 6
     assert report.export_bytes > 0
 
-    # The ritual sent its own notices (phase changes, receipts) along the way.
-    assert report.emails_sent >= 4
-
     # Deterministic wards must have held: leaderboard_mode locked once OPEN, the
     # submission cap, configuration sealed once FROZEN, the backward transition
     # FROZEN→DRAFT, and an offering refused while FROZEN.
