@@ -58,8 +58,7 @@ Deploy it, run your event, export a structured JSON archive, then tear it down.
 | Frontend | React / Next.js 14+ (static export) |
 | Database | SQLite (WAL mode) |
 | ORM / Migrations | SQLAlchemy 2 + Alembic |
-| Auth | JWT in HTTP-only cookies |
-| Email | SMTP via aiosmtplib |
+| Auth | Admin-distributed access passwords → JWT in HTTP-only cookies |
 | Container | Docker (single image) |
 | Target deploy | Hugging Face Spaces (port 7860) |
 | WASM runtime | wasmtime-py (MVP-3) |

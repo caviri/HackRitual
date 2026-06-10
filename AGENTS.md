@@ -103,12 +103,12 @@ Use **pnpm** (pinned via `packageManager`), not npm or yarn. Node 20+.
 ## Backend key files
 
 - `backend/app/main.py` — FastAPI factory (`create_app()`), lifespan (DB seeding), CORS, static mount
-- `backend/app/config.py` — `Settings` (pydantic-settings); module-level singleton `settings`. Fails fast at import if required env vars are missing. Requires at least one of `ADMIN_SEED_EMAILS` or `ADMIN_SETUP_TOKEN`.
+- `backend/app/config.py` — `Settings` (pydantic-settings); module-level singleton `settings`. Fails fast at import if required env vars are missing. Requires `ADMIN_SEED_EMAILS` and `ADMIN_PASSWORD`.
 - `backend/app/database.py` — SQLAlchemy engine with WAL/FK/busy_timeout pragmas, `SessionLocal`, `get_db()` dependency
 - `backend/app/cli.py` — Typer CLI (`serve`, `migrate`, `health`, `info`)
 - `backend/app/models/` — SQLAlchemy ORM models (all imported in `models/__init__.py` so Alembic sees them)
-- `backend/app/routers/` — one module per domain (`health`, `auth`, `users`, `setup`, `participants`, …)
-- `backend/app/services/` — business logic with no HTTP concerns (`auth.py`, `email.py`, `participants.py`, `audit.py`)
+- `backend/app/routers/` — one module per domain (`health`, `auth`, `users`, `applications`, `participants`, …)
+- `backend/app/services/` — business logic with no HTTP concerns (`auth.py`, `passwords.py`, `applications.py`, `participants.py`, `audit.py`)
 - `backend/app/schemas/` — Pydantic request/response models
 - `backend/app/middleware/auth.py` — `get_current_user`, `require_admin`, `require_role` dependencies
 - `backend/tests/conftest.py` — session-scoped fixtures that inject a temp SQLite DB and minimal env vars; no real `.env` needed for tests
@@ -126,11 +126,19 @@ See `docs/event-lifecycle.md` for the full state machine.
 
 ### Auth flow
 
-Passwordless magic-link via 6-digit codes. The code is generated, SHA-256 hashed,
-stored in the DB, and emailed via SMTP. On verification a JWT is issued as an
-HTTP-only cookie (`session`). The middleware also accepts `Authorization: Bearer
-<token>` for API/agent access. In-memory rate limiting: 3/email, 10/IP per 15 min;
-5 verify attempts.
+Admin-distributed access passwords. Each user holds one generated password
+(`word-word-NNNN`, see `services/passwords.py`) stored in plaintext on the
+unique `users.access_password` column — the password alone identifies the user
+at `POST /api/auth/login`. On success a JWT is issued as an HTTP-only cookie
+(`session`). The middleware also accepts `Authorization: Bearer <token>` for
+API/agent access. Failed logins are throttled in memory: 10 per IP per 15 min
+(load-bearing — it is what makes the password entropy sufficient).
+
+Joining: visitors petition at `POST /api/applications` (or arrive via the admin
+CSV import). Approval in `/admin/applications/` mints the User + password; the
+admin delivers it by hand (copy/mailto buttons). The platform sends no email.
+The first `ADMIN_SEED_EMAILS` address gets its password re-synced from
+`ADMIN_PASSWORD` on every boot — the lockout recovery path.
 
 ### Storage
 
@@ -150,11 +158,6 @@ HTTP-only cookie (`session`). The middleware also accepts `Authorization: Bearer
   session-scoped env is intentional.
 - Run `make lint` and `make fmt` before considering a change done. Add or update
   tests for behavioral changes.
-
-## SMTP / email in dev
-
-Set `SMTP_HOST` to `localhost`, `127.0.0.1`, or `console` to activate console/dev
-mode — login codes are printed to stdout instead of sent via SMTP.
 
 ## Writing style
 

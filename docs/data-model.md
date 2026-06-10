@@ -74,8 +74,8 @@
 
 ```
    ┌────────────┐    ┌────────────┐    ┌──────────────┐
-   │ login_codes│    │  sessions  │    │  audit_log   │
-   │ (passwordless) │ │ (jwt cookie ref)│ │ (admin actions) │
+   │applications│    │  sessions  │    │  audit_log   │
+   │ (join petitions) │ │ (jwt cookie ref)│ │ (admin actions) │
    └────────────┘    └────────────┘    └──────────────┘
 
    ┌────────────┐
@@ -164,11 +164,11 @@ File metadata. Binaries live on disk under
 `UPLOAD_DIR/{event_id}/{participant_id}/{submission_id}/`. We store the
 relative `path`, `mime_type`, `size_bytes`, and `sha256` for integrity checks.
 
-### `login_codes`
+### `applications`
 
-One-time magic-link codes for passwordless login. Short-lived (10 min),
-single-use. `request_ip` is stored as a salted daily-rotating hash for abuse
-protection only — never exported.
+Petitions to join, filed through the public `/apply/` form or the admin CSV
+import (`source` records which). Approval mints the User and its access
+password and stamps `user_id`/`decided_by`/`decided_at`.
 
 ### `sessions`
 
@@ -237,8 +237,8 @@ Only path, MIME type, size, and SHA-256 are stored in the `files` table.
   `user.role` is enough. No `g`/`g2`/`p` policy rows.
 - **Multi-tenant `hackathon_id` everywhere.** There is exactly one event;
   carrying its ID on every FK chain would be pure cost.
-- **Keycloak-shaped User.** HackRitual keeps the email + magic-link identity
-  model. No `keycloak_id`, no external IdP.
+- **Keycloak-shaped User.** HackRitual keeps the email + access-password
+  identity model. No `keycloak_id`, no external IdP.
 - **Separate `Team` table.** A team in HackRitual is a `participant` of type
   `team`. Adding a second team concept would duplicate identity.
 - **`TeamParticipant` join.** Already served by `participant_members`.

@@ -26,11 +26,7 @@ HF Spaces provides a free Docker runtime with optional persistent storage.
    APP_BASE_URL        = https://<your-space>.hf.space
    JWT_SECRET          = <generate: python3 -c "import secrets; print(secrets.token_hex(32))">
    ADMIN_SEED_EMAILS   = you@example.com
-   SMTP_HOST           = smtp.sendgrid.net  (or your provider)
-   SMTP_PORT           = 587
-   SMTP_USER           = apikey
-   SMTP_PASS           = <your SMTP password>
-   SMTP_FROM           = hackritual@yourdomain.com
+   ADMIN_PASSWORD      = <the primary admin's login password>
    EVENT_ID            = my-hackathon-2026
    EVENT_TITLE         = My Hackathon 2026
    EVENT_TYPE          = hackathon
@@ -194,11 +190,10 @@ See `.env.example` for the full annotated list.
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
-| `APP_BASE_URL` | Yes | — | Public URL; used in email links |
+| `APP_BASE_URL` | Yes | — | Public URL; CORS + secure-cookie detection |
 | `JWT_SECRET` | Yes | — | Must be stable; rotate = all sessions invalidated |
-| `ADMIN_SEED_EMAILS` | One of | — | Comma-separated admin emails |
-| `ADMIN_SETUP_TOKEN` | One of | — | One-time claim token |
-| `SMTP_*` | Yes | — | Required for email login codes |
+| `ADMIN_SEED_EMAILS` | Yes | — | Comma-separated admin emails; first = primary admin |
+| `ADMIN_PASSWORD` | Yes | — | Primary admin's login password (re-synced each boot) |
 | `EVENT_ID` | Yes | — | Unique slug (used in export filenames) |
 | `EVENT_TITLE` | Yes | — | Human-readable name |
 | `EVENT_START/END` | Yes | — | ISO 8601 datetimes |

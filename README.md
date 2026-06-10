@@ -38,7 +38,7 @@ export. See [docs/event-lifecycle.md](docs/event-lifecycle.md).
 ```bash
 git clone <repo-url> && cd HackRitual
 cd src/backend && uv sync --extra dev
-cp ../../.env.example ../../.env   # set JWT_SECRET, SMTP_*, EVENT_*, ADMIN_SEED_EMAILS
+cp ../../.env.example ../../.env   # set JWT_SECRET, EVENT_*, ADMIN_SEED_EMAILS, ADMIN_PASSWORD
 uv run hackritual migrate
 uv run hackritual serve --reload   # → http://localhost:7860
 ```
@@ -67,7 +67,6 @@ The deploy target. One Space, one event, one container.
 1. Create a new Space — SDK: **Docker**.
 2. Enable **Persistent Storage** — without it the event memory is lost on restart.
 3. Set the environment variables from `.env.example` as Space secrets.
-   (`SMTP_HOST=console` prints login codes to the logs if you just want to test.)
 4. Push this repository to the Space.
 5. Verify: `https://<your-space>.hf.space/api/health`.
 
@@ -87,8 +86,7 @@ One container, one process, one SQLite file.
 | Backend | Python 3.11 / FastAPI |
 | Frontend | Next.js 14 static export, served by FastAPI |
 | Database | SQLite (WAL) + Alembic |
-| Auth | Passwordless email magic-link → JWT in an HTTP-only cookie |
-| Email | SMTP via aiosmtplib (console mode for dev) |
+| Auth | Admin-distributed access passwords → JWT in an HTTP-only cookie |
 | Container | Single Docker image, port 7860 |
 
 ---

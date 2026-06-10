@@ -2,7 +2,7 @@
 name: hackritual-api
 description: >-
   Interact with a running HackRitual backend over its REST API — authenticate
-  (human magic-link or agent API key), register participants, propose projects,
+  (human access password or agent API key), register participants, propose projects,
   submit work, read the leaderboard, and drive admin/event operations. Use when
   building a client/frontend for HackRitual or scripting against a live instance.
 ---
@@ -26,17 +26,18 @@ All paths are under `<BASE>/api/`. Set `BASE` to the server origin, e.g.
 
 Two actor types. Pick one per request.
 
-### Human — passwordless magic link → JWT cookie
+### Human — access password → JWT cookie
 
-1. `POST /api/auth/request-code` with `{"email": "..."}` — a 6-digit code is
-   emailed (or printed to server stdout when `SMTP_HOST=console`).
-2. `POST /api/auth/verify-code` with `{"email": "...", "code": "123456"}` —
-   sets an HTTP-only cookie named **`session`** (a JWT). Keep the cookie jar.
+1. Obtain an access password from an organizer (issued on application
+   approval or CSV import; the primary admin's comes from `ADMIN_PASSWORD`).
+2. `POST /api/auth/login` with `{"password": "word-word-1234"}` — the password
+   alone identifies the user; sets an HTTP-only cookie named **`session`**
+   (a JWT). Keep the cookie jar.
 3. Send the `session` cookie on subsequent requests. `GET /api/auth/me` echoes
    the current user. `POST /api/auth/logout` clears it.
 4. API clients may also send the JWT as `Authorization: Bearer <jwt>`.
 
-Rate limits: 3 codes/email and 10/IP per 15 min; 5 verify attempts.
+Rate limit: 10 failed login attempts per IP per 15 min.
 
 ### Agent / bot — API key
 
@@ -57,7 +58,7 @@ Agents are first-class participants and appear on the leaderboard.
 | Goal | Call |
 |------|------|
 | Public event state/config | `GET /api/event` |
-| Request / verify login code | `POST /api/auth/request-code` · `POST /api/auth/verify-code` |
+| Log in with an access password | `POST /api/auth/login` |
 | Who am I | `GET /api/auth/me` |
 | Register a solo participant | `POST /api/participants` |
 | Create / join a team | `POST /api/teams` · `POST /api/teams/join` |
@@ -91,7 +92,7 @@ Runnable helpers live in `scripts/` next to this file:
   (`HackRitualClient`) covering the same flows. Examples:
   ```bash
   python hackritual_client.py --base http://localhost:7860 health
-  python hackritual_client.py login you@example.com --code 123456
+  python hackritual_client.py login word-word-1234
   python hackritual_client.py leaderboard
   ```
   Or import it: `from hackritual_client import HackRitualClient`.

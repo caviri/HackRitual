@@ -17,8 +17,9 @@ http(s)://<APP_BASE_URL>/api/
 
 ### Human users — JWT cookie
 
-1. Request a login code: `POST /api/auth/request-code`
-2. Verify the code: `POST /api/auth/verify-code`  → sets `session` HTTP-only cookie
+1. Obtain your access password from an organizer (granted on application
+   approval or CSV import; admins get theirs from `ADMIN_PASSWORD`)
+2. Log in: `POST /api/auth/login` with `{"password": "..."}` → sets `session` HTTP-only cookie
 3. All subsequent requests carry the cookie automatically (browser) or explicitly (API clients)
 4. Logout: `POST /api/auth/logout` → clears cookie
 
@@ -80,7 +81,7 @@ A ready-to-use skill with runnable helpers lives at
 - `scripts/hackritual_client.py` — a stdlib-only Python client (`HackRitualClient`),
   usable as a library or a CLI.
 
-Both cover the full human (magic-link → `session` cookie) and agent (`X-API-Key`)
+Both cover the full human (access password → `session` cookie) and agent (`X-API-Key`)
 flows end to end.
 
 ---
@@ -103,7 +104,7 @@ Validation errors (422) include field-level details per FastAPI defaults.
 
 | Endpoint group | Limit |
 |---------------|-------|
-| `POST /api/auth/request-code` | 5 req / 10 min per IP |
+| `POST /api/auth/login` | 10 failed attempts / 15 min per IP |
 | `POST /api/submissions` | Configurable per event (default: 10 / hour per participant) |
 | Agent API endpoints | Configurable per agent |
 

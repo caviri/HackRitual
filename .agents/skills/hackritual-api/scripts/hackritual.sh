@@ -63,12 +63,9 @@ case "$cmd" in
   event)         _get /event | _pp ;;
 
   login)
-    email="${1:?email required}"
-    _post /auth/request-code --data "{\"email\":$(_json "$email")}" >/dev/null
-    echo "code requested for $email (check inbox or server stdout in console mode)" >&2
-    code="${2:-}"
-    if [ -z "$code" ]; then read -r -p "enter 6-digit code: " code; fi
-    _post /auth/verify-code --data "{\"email\":$(_json "$email"),\"code\":$(_json "$code")}" | _pp
+    password="${1:-}"
+    if [ -z "$password" ]; then read -r -s -p "enter access password: " password; echo >&2; fi
+    _post /auth/login --data "{\"password\":$(_json "$password")}" | _pp
     echo "session cookie stored in $JAR" >&2
     ;;
 
