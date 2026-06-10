@@ -1,107 +1,104 @@
 """
-Step 03 — Authentication tests.
+Authentication tests — access-password login.
 
 Covers:
-- Code generation and hashing
-- LoginCode creation and verification (happy path, expired, used, wrong code)
+- Password generation (format, uniqueness)
+- Password lookup (happy path, wrong, inactive, NULL)
 - JWT creation and decoding
-- Rate limiting (request-code and verify-code)
-- POST /api/auth/request-code (204, 429)
-- POST /api/auth/verify-code (200, 401, 429)
+- Login rate limiting (per-IP failures)
+- POST /api/auth/login (200, 401, 422, 429)
 - POST /api/auth/logout (204)
 - POST /api/auth/refresh (200, 401)
 - GET  /api/auth/me (200, 401)
-- First-login user auto-creation
-- Admin-seeded user can log in
+- Solo participant auto-creation on first login
+- require_admin rejects non-admins
 """
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
 
+def _make_user(db, password: str, role: str = "user", status: str = "active"):
+    from app.models.user import User
+
+    user = User(
+        email=f"u_{uuid.uuid4()}@test.local",
+        role=role,
+        status=status,
+        access_password=password,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _unique_password() -> str:
+    return f"test-{uuid.uuid4().hex[:10]}"
+
+
 # ------------------------------------------------------------------ #
-# Code generation
+# Password generation
 # ------------------------------------------------------------------ #
 
-def test_generate_code_is_six_digits():
-    from app.services.auth import generate_code
+def test_generate_password_format():
+    from app.services.passwords import generate_password
+
     for _ in range(20):
-        code = generate_code()
-        assert len(code) == 6
-        assert code.isdigit()
-        assert 100_000 <= int(code) <= 999_999
+        pw = generate_password()
+        assert re.fullmatch(r"[a-z]+-[a-z]+-\d{4}", pw), pw
 
 
-def test_hash_code_is_deterministic():
-    from app.services.auth import hash_code
-    assert hash_code("482917") == hash_code("482917")
-    assert hash_code("482917") != hash_code("482918")
-    assert len(hash_code("123456")) == 64  # SHA-256 hex
+def test_generate_unique_password_avoids_collisions(_set_env):
+    from app.database import SessionLocal
+    from app.services.passwords import generate_unique_password
 
-
-def test_hash_ip_truncates():
-    from app.services.auth import hash_ip
-    h = hash_ip("192.168.1.1")
-    assert len(h) == 16
+    with SessionLocal() as db:
+        pws = {generate_unique_password(db) for _ in range(10)}
+    assert len(pws) == 10
 
 
 # ------------------------------------------------------------------ #
-# LoginCode CRUD
+# Password lookup
 # ------------------------------------------------------------------ #
 
-def test_create_and_verify_login_code(_set_env):
+def test_get_user_by_password_happy_path(_set_env):
     from app.database import SessionLocal
-    from app.services.auth import create_login_code, verify_login_code
+    from app.services.auth import get_user_by_password
 
-    email = f"code_{uuid.uuid4()}@test.local"
+    pw = _unique_password()
     with SessionLocal() as db:
-        raw, record = create_login_code(email, db, request_ip="127.0.0.1")
-        assert record.used_at is None
-        assert verify_login_code(email, raw, db) is True
-        # Second use should fail — code is now marked used
-        assert verify_login_code(email, raw, db) is False
+        user = _make_user(db, pw)
+        found = get_user_by_password(db, pw)
+        assert found is not None and found.id == user.id
+        # Lookup is case/whitespace tolerant
+        assert get_user_by_password(db, f"  {pw.upper()}  ").id == user.id
 
 
-def test_wrong_code_is_rejected(_set_env):
+def test_get_user_by_password_rejects_wrong_and_empty(_set_env):
     from app.database import SessionLocal
-    from app.services.auth import create_login_code, verify_login_code
+    from app.services.auth import get_user_by_password
 
-    email = f"wrong_{uuid.uuid4()}@test.local"
     with SessionLocal() as db:
-        create_login_code(email, db)
-        assert verify_login_code(email, "000000", db) is False
+        _make_user(db, _unique_password())
+        assert get_user_by_password(db, "no-such-password-0000") is None
+        assert get_user_by_password(db, "") is None
+        assert get_user_by_password(db, None) is None
 
 
-def test_expired_code_is_rejected(_set_env):
+def test_get_user_by_password_rejects_inactive(_set_env):
     from app.database import SessionLocal
-    from app.services.auth import create_login_code, verify_login_code
+    from app.services.auth import get_user_by_password
 
-    email = f"exp_{uuid.uuid4()}@test.local"
+    pw = _unique_password()
     with SessionLocal() as db:
-        raw, record = create_login_code(email, db, expires_minutes=10)
-        # Force expiry
-        record.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
-        db.commit()
-        assert verify_login_code(email, raw, db) is False
-
-
-def test_cleanup_expired_codes(_set_env):
-    from app.database import SessionLocal
-    from app.services.auth import create_login_code, cleanup_expired_codes
-
-    email = f"cleanup_{uuid.uuid4()}@test.local"
-    with SessionLocal() as db:
-        _, record = create_login_code(email, db, expires_minutes=10)
-        record.expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
-        db.commit()
-        deleted = cleanup_expired_codes(db)
-        assert deleted >= 1
+        _make_user(db, pw, status="inactive")
+        assert get_user_by_password(db, pw) is None
 
 
 # ------------------------------------------------------------------ #
@@ -129,6 +126,7 @@ def test_jwt_roundtrip(_set_env):
 
 def test_invalid_jwt_raises(_set_env):
     from jose import JWTError
+
     from app.services.auth import decode_jwt
 
     with pytest.raises(JWTError):
@@ -149,33 +147,25 @@ def test_is_near_expiry():
 # Rate limiting
 # ------------------------------------------------------------------ #
 
-def test_rate_limit_request_code_per_email():
+def test_rate_limit_login_counts_failures():
     from app.services import auth as svc
 
-    # Reset bucket
-    email = f"rl_{uuid.uuid4()}@test.local"
-    key = f"req_code:email:{email}"
-    svc._rate_buckets.pop(key, None)
+    ip = f"10.0.0.{uuid.uuid4().int % 250}"
+    svc._rate_buckets.pop(f"login:ip:{ip}", None)
 
-    assert svc.check_rate_limit_request_code(email, None) is True
-    svc.record_code_request(email, None)
-    svc.record_code_request(email, None)
-    svc.record_code_request(email, None)
-    # Now at limit
-    assert svc.check_rate_limit_request_code(email, None) is False
+    for _ in range(10):
+        assert svc.check_rate_limit_login(ip) is True
+        svc.record_login_failure(ip)
+    assert svc.check_rate_limit_login(ip) is False
+
+    svc.clear_login_failures(ip)
+    assert svc.check_rate_limit_login(ip) is True
 
 
-def test_rate_limit_verify():
+def test_rate_limit_login_no_ip_allowed():
     from app.services import auth as svc
 
-    email = f"rv_{uuid.uuid4()}@test.local"
-    key = f"verify:email:{email}"
-    svc._rate_buckets.pop(key, None)
-
-    for _ in range(5):
-        assert svc.check_rate_limit_verify(email) is True
-        svc.record_verify_attempt(email)
-    assert svc.check_rate_limit_verify(email) is False
+    assert svc.check_rate_limit_login(None) is True
 
 
 # ------------------------------------------------------------------ #
@@ -192,137 +182,168 @@ def _get_valid_session_cookie(client_headers: dict) -> str | None:
     return None
 
 
-async def _full_login(client, email: str) -> str:
-    """Perform a full request-code + verify-code cycle. Returns session token."""
-    from app.services.auth import hash_code
+async def _full_login(client, password: str | None = None) -> tuple[str, str]:
+    """Create a user with a known password and log in over HTTP.
+
+    Returns (session_cookie, user_email).
+    """
     from app.database import SessionLocal
-    from app.models.login_code import LoginCode
-    from datetime import timezone
 
-    # Inject a known code directly to avoid SMTP
-    code = "123456"
+    pw = password or _unique_password()
     with SessionLocal() as db:
-        lc = LoginCode(
-            email=email.lower(),
-            code_hash=hash_code(code),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-        )
-        db.add(lc)
-        db.commit()
+        user = _make_user(db, pw)
+        email = user.email
 
-    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": code})
+    resp = await client.post("/api/auth/login", json={"password": pw})
     assert resp.status_code == 200, resp.text
     cookie = _get_valid_session_cookie(dict(resp.headers))
-    return cookie
+    return cookie, email
 
 
 # ------------------------------------------------------------------ #
-# POST /api/auth/request-code
+# POST /api/auth/login
 # ------------------------------------------------------------------ #
 
 @pytest.mark.anyio
-async def test_request_code_returns_204(client):
-    resp = await client.post("/api/auth/request-code", json={"email": "test@test.local"})
-    assert resp.status_code == 204
-
-
-@pytest.mark.anyio
-async def test_request_code_invalid_email(client):
-    resp = await client.post("/api/auth/request-code", json={"email": "not-an-email"})
-    assert resp.status_code == 422
-
-
-@pytest.mark.anyio
-async def test_request_code_rate_limited(client):
-    from app.services import auth as svc
-    email = f"rl_http_{uuid.uuid4()}@test.local"
-    key = f"req_code:email:{email}"
-    svc._rate_buckets.pop(key, None)
-
-    for _ in range(3):
-        r = await client.post("/api/auth/request-code", json={"email": email})
-        assert r.status_code == 204
-
-    # 4th request should be rate-limited
-    r = await client.post("/api/auth/request-code", json={"email": email})
-    assert r.status_code == 429
-
-
-# ------------------------------------------------------------------ #
-# POST /api/auth/verify-code
-# ------------------------------------------------------------------ #
-
-@pytest.mark.anyio
-async def test_verify_code_success(client):
-    email = f"verify_{uuid.uuid4()}@test.local"
-    from app.services.auth import hash_code
+async def test_login_success_sets_cookie_and_returns_user(client):
     from app.database import SessionLocal
-    from app.models.login_code import LoginCode
 
-    code = "654321"
+    pw = _unique_password()
     with SessionLocal() as db:
-        db.add(LoginCode(
-            email=email,
-            code_hash=hash_code(code),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-        ))
-        db.commit()
+        user = _make_user(db, pw)
 
-    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": code})
+    resp = await client.post("/api/auth/login", json={"password": pw})
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["user"]["email"] == email
-    assert "set-cookie" in dict(resp.headers)
+    body = resp.json()
+    assert body["user"]["email"] == user.email
+    assert _get_valid_session_cookie(dict(resp.headers))
 
 
 @pytest.mark.anyio
-async def test_verify_wrong_code_returns_401(client):
-    email = f"wrong_{uuid.uuid4()}@test.local"
-    from app.services.auth import hash_code
-    from app.database import SessionLocal
-    from app.models.login_code import LoginCode
-
-    with SessionLocal() as db:
-        db.add(LoginCode(
-            email=email,
-            code_hash=hash_code("111111"),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-        ))
-        db.commit()
-
-    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": "999999"})
+async def test_login_wrong_password_returns_401(client):
+    resp = await client.post("/api/auth/login", json={"password": "nope-nope-0000"})
     assert resp.status_code == 401
 
 
 @pytest.mark.anyio
-async def test_verify_code_creates_user_on_first_login(client):
+async def test_login_short_password_returns_422(client):
+    resp = await client.post("/api/auth/login", json={"password": "ab"})
+    assert resp.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_login_inactive_user_returns_401(client):
+    from app.database import SessionLocal
+
+    pw = _unique_password()
+    with SessionLocal() as db:
+        _make_user(db, pw, status="inactive")
+
+    resp = await client.post("/api/auth/login", json={"password": pw})
+    assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_login_rate_limited_after_failures(client):
+    from app.services import auth as svc
+
+    ip = "203.0.113.77"
+    svc._rate_buckets.pop(f"login:ip:{ip}", None)
+    headers = {"x-forwarded-for": ip}
+
+    for _ in range(10):
+        r = await client.post(
+            "/api/auth/login", json={"password": "wrong-wrong-0000"}, headers=headers
+        )
+        assert r.status_code == 401
+
+    r = await client.post(
+        "/api/auth/login", json={"password": "wrong-wrong-0000"}, headers=headers
+    )
+    assert r.status_code == 429
+    svc._rate_buckets.pop(f"login:ip:{ip}", None)
+
+
+@pytest.mark.anyio
+async def test_login_updates_last_login_at(client):
     from app.database import SessionLocal
     from app.models.user import User
-    from app.models.login_code import LoginCode
-    from app.services.auth import hash_code
 
-    email = f"newuser_{uuid.uuid4()}@test.local"
+    pw = _unique_password()
     with SessionLocal() as db:
-        assert db.query(User).filter_by(email=email).first() is None
-        db.add(LoginCode(
-            email=email,
-            code_hash=hash_code("777777"),
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-        ))
-        db.commit()
+        user = _make_user(db, pw)
+        assert user.last_login_at is None
+        uid = user.id
 
-    resp = await client.post("/api/auth/verify-code", json={"email": email, "code": "777777"})
+    resp = await client.post("/api/auth/login", json={"password": pw})
     assert resp.status_code == 200
 
     with SessionLocal() as db:
-        user = db.query(User).filter_by(email=email).first()
-        assert user is not None
-        assert user.role == "user"
+        assert db.get(User, uid).last_login_at is not None
+
+
+@pytest.mark.anyio
+async def test_login_creates_solo_participant_when_open(client):
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.event import Event
+    from app.models.participant import Participant
+    from app.models.participant_member import ParticipantMember
+
+    from datetime import datetime, timezone
+
+    with SessionLocal() as db:
+        event = db.get(Event, settings.event_id)
+        if event is None:
+            event = Event(
+                id=settings.event_id,
+                title="Test Event",
+                type="hackathon",
+                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            )
+            db.add(event)
+        previous_state = event.state or "DRAFT"
+        event.state = "OPEN"
+        db.commit()
+
+    try:
+        pw = _unique_password()
+        with SessionLocal() as db:
+            user = _make_user(db, pw)
+            uid = user.id
+
+        resp = await client.post("/api/auth/login", json={"password": pw})
+        assert resp.status_code == 200
+
+        with SessionLocal() as db:
+            p = (
+                db.query(Participant)
+                .join(ParticipantMember, ParticipantMember.participant_id == Participant.id)
+                .filter(ParticipantMember.user_id == uid)
+                .first()
+            )
+            assert p is not None
+            assert p.type == "human"
+    finally:
+        with SessionLocal() as db:
+            event = db.get(Event, settings.event_id)
+            event.state = previous_state
+            db.commit()
 
 
 # ------------------------------------------------------------------ #
-# GET /api/auth/me
+# Session lifecycle: me / logout / refresh
 # ------------------------------------------------------------------ #
+
+@pytest.mark.anyio
+async def test_me_returns_current_user(client):
+    cookie, email = await _full_login(client)
+
+    resp = await client.get("/api/auth/me", cookies={"session": cookie})
+    assert resp.status_code == 200
+    assert resp.json()["email"] == email
+
 
 @pytest.mark.anyio
 async def test_me_unauthenticated_returns_401(client):
@@ -331,46 +352,22 @@ async def test_me_unauthenticated_returns_401(client):
 
 
 @pytest.mark.anyio
-async def test_me_returns_current_user(client):
-    email = f"me_{uuid.uuid4()}@test.local"
-    cookie = await _full_login(client, email)
-
-    resp = await client.get("/api/auth/me", cookies={"session": cookie})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["email"] == email
-    assert data["role"] == "user"
-
-
-# ------------------------------------------------------------------ #
-# POST /api/auth/logout
-# ------------------------------------------------------------------ #
-
-@pytest.mark.anyio
 async def test_logout_clears_cookie(client):
-    email = f"logout_{uuid.uuid4()}@test.local"
-    cookie = await _full_login(client, email)
+    cookie, _ = await _full_login(client)
 
     resp = await client.post("/api/auth/logout", cookies={"session": cookie})
     assert resp.status_code == 204
-    # After logout, /me should return 401
-    resp2 = await client.get("/api/auth/me")
-    assert resp2.status_code == 401
+    sc = resp.headers.get("set-cookie", "")
+    assert "session=" in sc  # cleared (expired) cookie sent back
 
-
-# ------------------------------------------------------------------ #
-# POST /api/auth/refresh
-# ------------------------------------------------------------------ #
 
 @pytest.mark.anyio
 async def test_refresh_with_valid_token(client):
-    email = f"refresh_{uuid.uuid4()}@test.local"
-    cookie = await _full_login(client, email)
+    cookie, email = await _full_login(client)
 
     resp = await client.post("/api/auth/refresh", cookies={"session": cookie})
     assert resp.status_code == 200
-    data = resp.json()
-    assert data["email"] == email
+    assert resp.json()["email"] == email
 
 
 @pytest.mark.anyio
@@ -379,30 +376,19 @@ async def test_refresh_without_token_returns_401(client):
     assert resp.status_code == 401
 
 
+@pytest.mark.anyio
+async def test_refresh_with_garbage_token_returns_401(client):
+    resp = await client.post("/api/auth/refresh", cookies={"session": "garbage"})
+    assert resp.status_code == 401
+
+
 # ------------------------------------------------------------------ #
-# Auth dependencies
+# Role guard
 # ------------------------------------------------------------------ #
 
 @pytest.mark.anyio
 async def test_require_admin_rejects_regular_user(client):
-    """A route guarded by require_admin must return 403 for role=user."""
-    from app.database import SessionLocal
-    from app.models.user import User
+    cookie, _ = await _full_login(client)
 
-    with SessionLocal() as db:
-        user = User(email=f"reg_{uuid.uuid4()}@test.local", role="user")
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-    # Use /api/auth/logout which requires get_current_user (authenticated)
-    # To test require_admin specifically we verify role logic in the dep directly.
-    from app.middleware.auth import require_admin
-    from fastapi import HTTPException
-
-    class FakeUser:
-        role = "user"
-
-    with pytest.raises(HTTPException) as exc:
-        require_admin(FakeUser())
-    assert exc.value.status_code == 403
+    resp = await client.get("/api/admin/users", cookies={"session": cookie})
+    assert resp.status_code == 403

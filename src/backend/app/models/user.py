@@ -17,6 +17,10 @@ class User(Base):
     display_name: Mapped[str | None] = mapped_column(String, nullable=True)
     role: Mapped[str] = mapped_column(String, nullable=False, default="user")  # user|admin|judge|mod
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")  # active|inactive
+    # The generated access password (word-word-NNNN). Plaintext by design:
+    # admins distribute it by hand and can re-copy it from the panel. Unique —
+    # login is a lookup on this column alone. NULL means the user cannot log in.
+    access_password: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -32,4 +36,5 @@ class User(Base):
 
     __table_args__ = (
         Index("ix_users_email", "email"),
+        Index("ix_users_access_password", "access_password", unique=True),
     )

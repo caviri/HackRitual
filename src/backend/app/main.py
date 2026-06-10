@@ -13,8 +13,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from datetime import UTC
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,7 +41,7 @@ async def _auto_transition_loop(interval_seconds: int = 60) -> None:
     Runs only when AUTO_TRANSITIONS is set. Checks every `interval_seconds`;
     each due transition is recorded in the audit log like a manual one.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from app.config import settings
     from app.database import SessionLocal
@@ -54,14 +55,14 @@ async def _auto_transition_loop(interval_seconds: int = 60) -> None:
                 event = get_event(db)
                 target = next_auto_state(
                     event.state,
-                    datetime.now(timezone.utc),
+                    datetime.now(UTC),
                     settings.event_start,
                     settings.event_end,
                 )
                 if target:
                     previous = event.state
                     event.state = target
-                    event.updated_at = datetime.now(timezone.utc)
+                    event.updated_at = datetime.now(UTC)
                     log_action(
                         db,
                         "event.transition",
@@ -86,7 +87,7 @@ async def _auto_transition_loop(interval_seconds: int = 60) -> None:
 
 
 async def _cleanup_loop(interval_seconds: int = 3600) -> None:
-    """Hourly data-retention sweep: expired login codes and sessions (§14.12)."""
+    """Hourly data-retention sweep: expired sessions (§14.12)."""
     from app.database import SessionLocal
     from app.services.cleanup import cleanup_expired_data
 
@@ -95,7 +96,7 @@ async def _cleanup_loop(interval_seconds: int = 3600) -> None:
             await asyncio.sleep(interval_seconds)
             with SessionLocal() as db:
                 removed = cleanup_expired_data(db)
-            if removed.get("login_codes") or removed.get("sessions"):
+            if removed.get("sessions"):
                 logger.info("Retention cleanup", extra=removed)
         except asyncio.CancelledError:
             raise
@@ -143,14 +144,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("Event record exists", extra={"event_id": settings.event_id})
 
         # ---- Seed admin users (create or promote) ---------------------
+        # The first seed email is the primary admin: its access password is
+        # re-synced to ADMIN_PASSWORD on every boot, so changing the env var
+        # and restarting always restores access. Other seed admins get a
+        # generated password on first seeding (visible in the admin panel).
         from app.services.audit import log_action
+        from app.services.passwords import generate_unique_password
+
+        primary_email = settings.admin_seed_email_list[0]
         for email in settings.admin_seed_email_list:
             existing = db.query(User).filter_by(email=email).first()
             if existing is None:
-                user = User(email=email, role="admin")
-                db.add(user)
+                existing = User(email=email, role="admin")
+                db.add(existing)
                 db.flush()
-                log_action(db, "user.admin_seeded", target_type="user", target_id=user.id,
+                log_action(db, "user.admin_seeded", target_type="user", target_id=existing.id,
                            metadata={"method": "seed_emails"})
                 logger.info("Admin user seeded", extra={"email": email})
             elif existing.role != "admin":
@@ -158,6 +166,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 log_action(db, "user.role_changed", target_type="user", target_id=existing.id,
                            metadata={"old_role": existing.role, "new_role": "admin", "method": "seed_emails"})
                 logger.info("Existing user promoted to admin", extra={"email": email})
+
+            if email == primary_email:
+                if existing.access_password != settings.admin_password:
+                    existing.access_password = settings.admin_password
+                    logger.info("Primary admin password synced from ADMIN_PASSWORD",
+                                extra={"email": email})
+            elif not existing.access_password:
+                existing.access_password = generate_unique_password(db)
+                logger.info("Generated access password for seeded admin",
+                            extra={"email": email})
         db.commit()
 
     finally:
@@ -221,7 +239,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ------------------------------------------------------------------ #
 def create_app() -> FastAPI:
     from app.config import settings
-
     from app.docs import API_DESCRIPTION, OPENAPI_TAGS, render_docs_html
 
     app = FastAPI(
@@ -278,48 +295,57 @@ def create_app() -> FastAPI:
     # ---------------------------------------------------------------- #
     # API routers
     # ---------------------------------------------------------------- #
-    from app.routers.health import router as health_router
-    from app.routers.auth import router as auth_router
-    from app.routers.users import router as users_router
-    from app.routers.setup import router as setup_router
-    from app.routers.participants import router as participants_router
-    from app.routers.scaffold import router as scaffold_router
-    from app.routers.event import public_router as event_router, admin_router as event_admin_router
-    from app.routers.tracks import router as tracks_router
-    from app.routers.phases import router as phases_router
-    from app.routers.pages import router as pages_router
-    from app.routers.projects import (
-        router as projects_router,
-        submissions_router,
-        admin_submissions_router,
-    )
-    from app.routers.uploads import router as uploads_router
-    from app.routers.exports import router as exports_router, admin_export_router
-    from app.routers.me import router as me_router
+    from app.routers.abuse import admin_abuse_router
+    from app.routers.admin import router as admin_router
     from app.routers.agents import (
-        router as agents_router,
-        self_router as agent_self_router,
         admin_router as agent_admin_router,
     )
-    from app.routers.admin import router as admin_router
-    from app.routers.repos import router as repos_router, feed_router as repos_feed_router
+    from app.routers.agents import (
+        router as agents_router,
+    )
+    from app.routers.agents import (
+        self_router as agent_self_router,
+    )
+    from app.routers.auth import router as auth_router
+    from app.routers.event import admin_router as event_admin_router
+    from app.routers.event import public_router as event_router
+    from app.routers.exports import admin_export_router
+    from app.routers.exports import router as exports_router
+    from app.routers.health import router as health_router
+    from app.routers.logs import router as logs_router
+    from app.routers.me import router as me_router
+    from app.routers.metrics import admin_metrics_router, privacy_router
+    from app.routers.pages import router as pages_router
+    from app.routers.participants import router as participants_router
+    from app.routers.phases import router as phases_router
+    from app.routers.projects import (
+        admin_submissions_router,
+        submissions_router,
+    )
+    from app.routers.projects import (
+        router as projects_router,
+    )
+    from app.routers.queue import admin_queue_router
+    from app.routers.repos import feed_router as repos_feed_router
+    from app.routers.repos import router as repos_router
+    from app.routers.scaffold import router as scaffold_router
+    from app.routers.scores import (
+        admin_scores_router,
+        admin_scoring_router,
+        leaderboard_router,
+        score_id_router,
+    )
     from app.routers.scores import (
         router as scores_router,
-        score_id_router,
-        admin_scoring_router,
-        admin_scores_router,
-        leaderboard_router,
     )
-    from app.routers.logs import router as logs_router
-    from app.routers.queue import admin_queue_router
-    from app.routers.abuse import admin_abuse_router
     from app.routers.scoring import admin_wasm_router, public_scoring_router
-    from app.routers.metrics import admin_metrics_router, privacy_router
+    from app.routers.tracks import router as tracks_router
+    from app.routers.uploads import router as uploads_router
+    from app.routers.users import router as users_router
 
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(users_router)
-    app.include_router(setup_router)
     app.include_router(participants_router)
     app.include_router(scaffold_router)
     app.include_router(event_router)

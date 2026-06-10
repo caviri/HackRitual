@@ -167,21 +167,25 @@ class TestIncrementWiring:
 # ============================================================================ #
 class TestCleanup:
     def test_cleanup_removes_expired(self):
+        import uuid as _uuid
         from app.database import SessionLocal
-        from app.models.login_code import LoginCode
+        from app.models.session import Session as SessionModel
+        from app.models.user import User
         from app.services.cleanup import cleanup_expired_data
 
         with SessionLocal() as db:
+            u = User(email=f"cl_{_uuid.uuid4()}@test.local", role="user")
+            db.add(u)
+            db.flush()
             db.add(
-                LoginCode(
-                    email="old@test.local",
-                    code_hash="x",
+                SessionModel(
+                    user_id=u.id,
                     expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
                 )
             )
             db.commit()
             removed = cleanup_expired_data(db)
-        assert removed["login_codes"] >= 1
+        assert removed["sessions"] >= 1
 
 
 # ============================================================================ #

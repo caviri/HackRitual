@@ -32,8 +32,3 @@ class UpdateRoleInput(BaseModel):
         if self.role not in VALID_ROLES:
             raise ValueError(f"role must be one of {VALID_ROLES}")
         return self.role
-
-
-class SetupInput(BaseModel):
-    token: str
-    email: str

@@ -12,6 +12,7 @@ def _make_settings(**overrides):
         "APP_BASE_URL": "http://localhost:7860",
         "JWT_SECRET": "testsecret",
         "ADMIN_SEED_EMAILS": "admin@test.local",
+        "ADMIN_PASSWORD": "test-admin-pass",
         "EVENT_ID": "evt-1",
         "EVENT_TITLE": "Evt",
         "EVENT_START": "2026-01-01T09:00:00+00:00",
@@ -31,12 +32,13 @@ class TestSettingsValidation:
 
     def test_requires_admin_seeding(self):
         from pydantic import ValidationError
-        with pytest.raises(ValidationError, match="ADMIN_SEED_EMAILS or ADMIN_SETUP_TOKEN"):
-            _make_settings(admin_seed_emails=None, admin_setup_token=None)
+        with pytest.raises(ValidationError, match="ADMIN_SEED_EMAILS"):
+            _make_settings(admin_seed_emails="")
 
-    def test_admin_setup_token_satisfies_requirement(self):
-        s = _make_settings(admin_seed_emails=None, admin_setup_token="tok123")
-        assert s.admin_setup_token == "tok123"
+    def test_requires_admin_password(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="ADMIN_PASSWORD"):
+            _make_settings(admin_password="short")
 
     def test_invalid_log_level_rejected(self):
         from pydantic import ValidationError

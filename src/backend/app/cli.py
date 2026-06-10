@@ -272,8 +272,8 @@ def info() -> None:
         ("event_type", settings.event_type),
         ("event_start", str(settings.event_start)),
         ("event_end", str(settings.event_end)),
-        ("admin_seed_emails", settings.admin_seed_emails or "[dim]not set[/]"),
-        ("admin_setup_token", _SECRET if settings.admin_setup_token else "[dim]not set[/]"),
+        ("admin_seed_emails", settings.admin_seed_emails),
+        ("admin_password", _SECRET),
         ("github_export_repo", settings.github_export_repo or "[dim]not set[/]"),
         ("github_token", _SECRET if settings.github_token else "[dim]not set[/]"),
     ]

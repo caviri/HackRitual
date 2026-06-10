@@ -10,8 +10,7 @@ from __future__ import annotations
 import os
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-
+from httpx import ASGITransport, AsyncClient
 
 # ------------------------------------------------------------------ #
 # Minimal valid env — set BEFORE app modules are imported by tests
@@ -20,6 +19,7 @@ MINIMAL_ENV = {
     "APP_BASE_URL": "http://localhost:7860",
     "JWT_SECRET": "test-secret-do-not-use-in-production",
     "ADMIN_SEED_EMAILS": "admin@test.local",
+    "ADMIN_PASSWORD": "test-admin-pass",
     "EVENT_ID": "test-event",
     "EVENT_TITLE": "Test Event",
     "EVENT_START": "2026-01-01T09:00:00+00:00",
@@ -58,8 +58,8 @@ def _set_env(tmp_path_factory):
 @pytest.fixture(scope="session", autouse=True)
 def _create_tables(_set_env):
     """Create all DB tables once per test session (after env is set)."""
-    from app.database import Base, engine  # imported AFTER env is set
     import app.models  # noqa: F401 — registers all models on Base.metadata
+    from app.database import Base, engine  # imported AFTER env is set
     Base.metadata.create_all(engine)
     yield
 

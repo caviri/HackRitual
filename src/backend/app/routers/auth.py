@@ -1,21 +1,20 @@
 """
 Authentication endpoints — the gates of the ritual.
 
-POST /api/auth/request-code  — send a magic login code
-POST /api/auth/verify-code   — verify code, receive session cookie
-POST /api/auth/logout        — dissolve the session
-POST /api/auth/refresh       — renew a near-expiry token
-GET  /api/auth/me            — identify the current bearer
+POST /api/auth/login    — present your access password, receive a session cookie
+POST /api/auth/logout   — dissolve the session
+POST /api/auth/refresh  — renew a near-expiry token
+GET  /api/auth/me       — identify the current bearer
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import UTC
 from typing import Annotated
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Cookie,
     Depends,
     HTTPException,
@@ -28,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.schemas.auth import MeResponse, RequestCodeInput, UserOut, VerifyCodeInput, VerifyCodeResponse
+from app.schemas.auth import LoginInput, LoginResponse, MeResponse, UserOut
 from app.services import auth as auth_svc
 
 logger = logging.getLogger(__name__)
@@ -68,72 +67,45 @@ def _client_ip(request: Request) -> str | None:
 
 
 # ------------------------------------------------------------------ #
-# POST /api/auth/request-code
+# POST /api/auth/login
 # ------------------------------------------------------------------ #
 
-@router.post("/request-code", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
-async def request_code(
-    data: RequestCodeInput,
+@router.post("/login", response_model=LoginResponse)
+async def login(
+    data: LoginInput,
     request: Request,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-) -> None:
-    """
-    Issue a magic login code and dispatch it by email.
-
-    Always returns 204 — never reveals whether the email address exists.
-    Rate-limited: 3 requests per email and 10 per IP per 15 minutes.
-    """
-    ip = _client_ip(request)
-    email = str(data.email).lower().strip()
-
-    if not auth_svc.check_rate_limit_request_code(email, ip):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many code requests. Wait a few minutes and try again.",
-        )
-
-    auth_svc.create_login_code(email=email, db=db, request_ip=ip)
-    auth_svc.record_code_request(email, ip)
-
-
-# ------------------------------------------------------------------ #
-# POST /api/auth/verify-code
-# ------------------------------------------------------------------ #
-
-@router.post("/verify-code", response_model=VerifyCodeResponse)
-async def verify_code(
-    data: VerifyCodeInput,
     response: Response,
     db: Session = Depends(get_db),
-) -> VerifyCodeResponse:
+) -> LoginResponse:
     """
-    Verify the magic code. On success: create user if needed, issue JWT cookie.
+    Log in with an access password (admin-distributed). On success: issue a
+    JWT session cookie.
 
-    Rate-limited to 5 failed attempts per code window — after which all
-    pending codes for the email are invalidated.
+    The password alone identifies the user. Failed attempts are throttled
+    per IP (10 per 15 minutes); the error never reveals whether a password
+    exists.
     """
-    email = str(data.email).lower().strip()
+    from datetime import datetime
 
-    if not auth_svc.check_rate_limit_verify(email):
-        auth_svc.invalidate_all_codes(email, db)
+    ip = _client_ip(request)
+
+    if not auth_svc.check_rate_limit_login(ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed attempts. Request a new code.",
+            detail="Too many failed attempts. Wait a few minutes and try again.",
         )
 
-    success = auth_svc.verify_login_code(email, data.code, db)
-    if not success:
-        auth_svc.record_verify_attempt(email)
+    user = auth_svc.get_user_by_password(db, data.password)
+    if user is None:
+        auth_svc.record_login_failure(ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired code.",
+            detail="Invalid access password.",
         )
 
-    # Code accepted — clear failure counter and issue session
-    auth_svc.invalidate_verify_attempts(email)
+    auth_svc.clear_login_failures(ip)
 
-    user = auth_svc.get_or_create_user(email, db)
+    user.last_login_at = datetime.now(UTC)
     token = auth_svc.create_jwt(user)
     _set_session_cookie(response, token)
 
@@ -161,16 +133,16 @@ async def verify_code(
             .first()
         )
         if not already:
+            from app.schemas.participants import ParticipantCreate
             from app.services.participants import (
                 can_register_participant,
                 create_solo_participant,
                 get_event_state,
             )
-            from app.schemas.participants import ParticipantCreate
 
             state = get_event_state(db)
             if can_register_participant(state):
-                handle = user.display_name or email.split("@")[0]
+                handle = user.display_name or user.email.split("@")[0]
                 create_solo_participant(
                     db,
                     user,
@@ -183,7 +155,7 @@ async def verify_code(
         # Never block signin on participant-create failure.
         db.rollback()
 
-    return VerifyCodeResponse(user=UserOut.model_validate(user))
+    return LoginResponse(user=UserOut.model_validate(user))
 
 
 # ------------------------------------------------------------------ #
@@ -245,10 +217,10 @@ async def me(
     db: Session = Depends(get_db),
 ) -> MeResponse:
     """Return the identity of the current bearer. Raises 401 if not authenticated."""
-    from app.schemas.auth import PortraitInfo
+    from app.config import settings
     from app.models.participant import Participant
     from app.models.participant_member import ParticipantMember
-    from app.config import settings
+    from app.schemas.auth import PortraitInfo
 
     portrait = None
     if user.portrait_path:

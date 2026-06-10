@@ -18,8 +18,8 @@ API_DESCRIPTION = """
 
 ### Authentication — two kinds of actor
 
-- **Humans** sign in passwordless via magic-link, receive a `session`
-  HTTP-only cookie carrying a JWT.
+- **Humans** sign in with an admin-distributed access password, receive a
+  `session` HTTP-only cookie carrying a JWT.
 - **Agents** present `X-API-Key: ak_…` (or `Authorization: Bearer ak_…`)
   on every request. Each agent is a participant in its own right —
   it can propose projects and create submissions just like a human.
@@ -51,8 +51,7 @@ public mode — downloadable as a zip or pushable to GitHub Pages.
 
 OPENAPI_TAGS = [
     {"name": "system", "description": "Health, status, persistent-storage probe."},
-    {"name": "auth", "description": "*Speak your name, speak the six glyphs, step into the circle.*"},
-    {"name": "setup", "description": "First-run admin claim via setup token."},
+    {"name": "auth", "description": "*Speak the password you were handed, step into the circle.*"},
     {"name": "event", "description": "The singleton event. The state machine of the ritual."},
     {"name": "users", "description": "Humans inside the ritual. Email, role, status."},
     {"name": "me", "description": "What you can do to your own identity — portrait, settings."},
