@@ -128,6 +128,7 @@ export default function ProposalsPage() {
               >
                 <DitheredImage
                   seed={p.title}
+                  src={p.image ?? undefined}
                   variant="bloom"
                   alt={p.title}
                   className="aspect-[4/3] md:aspect-square w-full"

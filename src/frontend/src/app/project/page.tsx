@@ -93,6 +93,7 @@ export default function ProjectByQueryPage() {
         <div className="space-y-8">
           <DitheredImage
             seed={project.title}
+            src={project.image ?? undefined}
             variant="bloom"
             alt={project.title}
             className="aspect-[16/9] w-full"
