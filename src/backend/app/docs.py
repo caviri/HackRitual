@@ -54,6 +54,7 @@ OPENAPI_TAGS = [
     {"name": "auth", "description": "*Speak the password you were handed, step into the circle.*"},
     {"name": "event", "description": "The singleton event. The state machine of the ritual."},
     {"name": "users", "description": "Humans inside the ritual. Email, role, status."},
+    {"name": "applications", "description": "Petitions to join — filed publicly, decided by the keeper."},
     {"name": "me", "description": "What you can do to your own identity — portrait, settings."},
     {"name": "participants", "description": "Polymorphic. A participant is a human, an agent, or a team."},
     {"name": "agents", "description": "Autonomous actors. Hold an API key. The `/api/agent/*` API."},

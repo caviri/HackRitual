@@ -4,6 +4,7 @@ Admin user management endpoints.
 GET    /api/admin/users            — list all users (paginated, filterable)
 GET    /api/admin/users/{id}       — get single user
 PATCH  /api/admin/users/{id}/role  — change role
+POST   /api/admin/users/{id}/regenerate-password — mint a fresh access password
 DELETE /api/admin/users/{id}       — deactivate (soft-delete)
 """
 
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import require_admin
-from app.schemas.users import UpdateRoleInput, UserDetail, UserListResponse, VALID_ROLES
+from app.schemas.users import VALID_ROLES, UpdateRoleInput, UserDetail, UserListResponse
 from app.services.audit import log_action
 
 logger = logging.getLogger(__name__)
@@ -63,14 +64,7 @@ def list_users(
 
     # Explicitly access all attributes while session is open to avoid lazy-loading issues
     user_data = [
-        UserDetail(
-            id=u.id,
-            email=u.email,
-            role=u.role,
-            status=u.status,
-            created_at=u.created_at,
-            last_login_at=u.last_login_at,
-        )
+        UserDetail.model_validate(u)
         for u in users
     ]
 
@@ -94,14 +88,7 @@ def get_user(
 ) -> UserDetail:
     user = _get_user_or_404(user_id, db)
     # Explicitly access all attributes while session is open
-    return UserDetail(
-        id=user.id,
-        email=user.email,
-        role=user.role,
-        status=user.status,
-        created_at=user.created_at,
-        last_login_at=user.last_login_at,
-    )
+    return UserDetail.model_validate(user)
 
 
 # ------------------------------------------------------------------ #
@@ -136,14 +123,7 @@ def update_role(
     db.commit()
     db.refresh(user)
     # Explicitly access all attributes while session is open
-    return UserDetail(
-        id=user.id,
-        email=user.email,
-        role=user.role,
-        status=user.status,
-        created_at=user.created_at,
-        last_login_at=user.last_login_at,
-    )
+    return UserDetail.model_validate(user)
 
 
 # ------------------------------------------------------------------ #
@@ -171,3 +151,26 @@ def deactivate_user(
     log_action(db, "user.deactivated", actor_id=admin.id, target_type="user", target_id=user.id)
     db.commit()
     # Participant cascade added in Step 05
+
+
+# ------------------------------------------------------------------ #
+# POST /api/admin/users/{user_id}/regenerate-password
+# ------------------------------------------------------------------ #
+
+@router.post("/{user_id}/regenerate-password", response_model=UserDetail)
+def regenerate_password(
+    user_id: str,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin),
+) -> UserDetail:
+    """Mint a fresh access password for a user. The old one stops working
+    immediately; the new one shows in the panel for copy/mailto delivery."""
+    from app.services.passwords import generate_unique_password
+
+    user = _get_user_or_404(user_id, db)
+    user.access_password = generate_unique_password(db)
+    log_action(db, "user.password_regenerated", actor_id=admin.id,
+               target_type="user", target_id=user.id)
+    db.commit()
+    db.refresh(user)
+    return UserDetail.model_validate(user)
