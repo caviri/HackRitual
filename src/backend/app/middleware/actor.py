@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from jose import JWTError
@@ -29,8 +29,8 @@ from app.services.auth import decode_jwt
 class Actor:
     """Discriminated wrapper around the two ways to identify a request."""
 
-    user: Optional[User] = None
-    agent: Optional[Agent] = None
+    user: User | None = None
+    agent: Agent | None = None
 
     @property
     def kind(self) -> str:
@@ -61,7 +61,7 @@ def hash_api_key(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
-def _agent_from_api_key(db: Session, api_key: str) -> Optional[Agent]:
+def _agent_from_api_key(db: Session, api_key: str) -> Agent | None:
     if not api_key:
         return None
     h = hash_api_key(api_key)
@@ -131,6 +131,19 @@ def get_current_actor(
         raise credentials_exc
 
     return Actor(user=user)
+
+
+def get_optional_actor(
+    request: Request,
+    session: Annotated[str | None, Cookie()] = None,
+    db: Session = Depends(get_db),
+) -> Actor | None:
+    """Like get_current_actor, but anonymous requests resolve to None
+    instead of 401 — for public endpoints that adapt to who is asking."""
+    try:
+        return get_current_actor(request, session, db)
+    except HTTPException:
+        return None
 
 
 def require_actor_admin(actor: Actor = Depends(get_current_actor)) -> Actor:
