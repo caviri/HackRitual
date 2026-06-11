@@ -10,13 +10,17 @@ interface Props {
 
 export function RepositoriesPanel({ projectId }: Props) {
   const [repos, setRepos] = useState<RepoDTO[] | null>(null);
+  const [canEdit, setCanEdit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [newUrl, setNewUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.projectRepos(projectId).then(setRepos);
+    void api.projectRepos(projectId).then((res) => {
+      setRepos(res.repositories);
+      setCanEdit(res.can_edit);
+    });
   }, [projectId]);
 
   async function attach(e: React.FormEvent) {
@@ -83,7 +87,8 @@ export function RepositoriesPanel({ projectId }: Props) {
         <p className="font-mono text-[0.78rem] text-fg-dim">summoning…</p>
       ) : repos.length === 0 ? (
         <p className="ritual text-fg-muted text-[1rem] mb-4">
-          No repositories linked yet. Paste a GitHub URL below to start tracking
+          No repositories linked yet.{' '}
+          {canEdit ? 'Paste a GitHub URL below to start tracking' : "The project's participant can link one to start tracking"}
           the project&apos;s commits — branches, messages, contributors all
           visible in one stream.
         </p>
@@ -126,22 +131,26 @@ export function RepositoriesPanel({ projectId }: Props) {
               <CommitFeed commits={r.commits} limit={10} />
 
               <footer className="mt-3 flex items-center gap-3 font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim">
-                <button
-                  type="button"
-                  disabled={refreshingId === r.id || busy}
-                  onClick={() => refresh(r)}
-                  className="text-fg-muted hover:text-primary transition-colors"
-                >
-                  {refreshingId === r.id ? '↻ polling…' : '↻ refresh'}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => detach(r)}
-                  className="text-fg-muted hover:text-danger transition-colors"
-                >
-                  ✕ detach
-                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    disabled={refreshingId === r.id || busy}
+                    onClick={() => refresh(r)}
+                    className="text-fg-muted hover:text-primary transition-colors"
+                  >
+                    {refreshingId === r.id ? '↻ polling…' : '↻ refresh'}
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => detach(r)}
+                    className="text-fg-muted hover:text-danger transition-colors"
+                  >
+                    ✕ detach
+                  </button>
+                )}
                 <span className="flex-1" />
                 {r.last_polled_at && (
                   <span>polled {new Date(r.last_polled_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
@@ -152,7 +161,13 @@ export function RepositoriesPanel({ projectId }: Props) {
         </ul>
       )}
 
-      {/* attach form */}
+      {/* attach form — the project's own people (or the keeper) only */}
+      {!canEdit && (repos?.length ?? 0) === 0 && (
+        <p className="font-mono text-[0.72rem] text-fg-dim mt-2">
+          ▒ only the project&apos;s participant may link repositories.
+        </p>
+      )}
+      {canEdit && (
       <form onSubmit={attach} className="flex flex-col sm:flex-row gap-2 mt-2">
         <input
           type="url"
@@ -169,6 +184,7 @@ export function RepositoriesPanel({ projectId }: Props) {
           ◆ link repo
         </button>
       </form>
+      )}
       {error && (
         <p className="ascii-frame !border-danger px-3 py-2 mt-3 font-mono text-[0.72rem] text-danger">
           ✕ {error}

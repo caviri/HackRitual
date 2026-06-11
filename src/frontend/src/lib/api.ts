@@ -730,8 +730,13 @@ export const api = {
   },
 
   // ── repositories
-  projectRepos: (projectId: string) =>
-    fetchJson<RepoDTO[]>(`/api/projects/${projectId}/repos`, []),
+  projectRepos: async (projectId: string) => {
+    const res = await fetchJson<
+      { can_edit: boolean; repositories: RepoDTO[] } | RepoDTO[]
+    >(`/api/projects/${projectId}/repos`, { can_edit: false, repositories: [] });
+    // Older backends returned a bare array.
+    return Array.isArray(res) ? { can_edit: false, repositories: res } : res;
+  },
 
   attachRepo: (projectId: string, url: string, label?: string) =>
     requireJson<RepoDTO>(`/api/projects/${projectId}/repos`, {

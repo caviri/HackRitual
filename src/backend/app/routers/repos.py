@@ -7,12 +7,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.middleware.actor import Actor, get_current_actor
+from app.middleware.actor import Actor, get_current_actor, get_optional_actor
 from app.models.project import Project
 from app.models.repository import RepoCommit, Repository
 from app.schemas.repos import (
     CommitResponse,
     RepoAttachRequest,
+    RepoListResponse,
     RepositoryResponse,
 )
 from app.services import repos as repo_service
@@ -76,18 +77,29 @@ def _repo_to_response(repo: Repository, db: Session) -> RepositoryResponse:
     )
 
 
-@router.get("/{project_id}/repos", response_model=list[RepositoryResponse])
+@router.get("/{project_id}/repos", response_model=RepoListResponse)
 async def list_project_repos(
     project_id: str,
     db: Session = Depends(get_db),
-) -> list[RepositoryResponse]:
+    actor: Actor | None = Depends(get_optional_actor),
+) -> RepoListResponse:
     """List a project's linked repositories with cached commits.
 
-    Auto-refreshes any repo whose data is older than the TTL.
+    Auto-refreshes any repo whose data is older than the TTL. `can_edit`
+    tells the asker whether they may attach/detach (project members and
+    the keeper only) — the panel hides its form otherwise.
     """
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
+
+    can_edit = False
+    if actor is not None:
+        try:
+            _require_project_member(db, actor, project)
+            can_edit = True
+        except HTTPException:
+            can_edit = False
 
     repos = (
         db.query(Repository)
@@ -98,7 +110,10 @@ async def list_project_repos(
     for repo in repos:
         await repo_service.refresh_if_stale(repo, db)
         db.refresh(repo)
-    return [_repo_to_response(r, db) for r in repos]
+    return RepoListResponse(
+        can_edit=can_edit,
+        repositories=[_repo_to_response(r, db) for r in repos],
+    )
 
 
 @router.post(

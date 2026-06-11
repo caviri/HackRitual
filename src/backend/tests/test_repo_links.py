@@ -125,3 +125,25 @@ async def test_anonymous_cannot_attach(client):
         f"/api/projects/{project_id}/repos", json={"url": _REPO_URL}
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_repo_list_reports_can_edit(client):
+    owner_id, owner_token = _make_user()
+    project_id = _make_project_with_owner(owner_id)
+    _, stranger_token = _make_user()
+
+    anon = await client.get(f"/api/projects/{project_id}/repos")
+    assert anon.status_code == 200
+    assert anon.json()["can_edit"] is False
+
+    stranger = await client.get(
+        f"/api/projects/{project_id}/repos", cookies={"session": stranger_token}
+    )
+    assert stranger.json()["can_edit"] is False
+
+    owner = await client.get(
+        f"/api/projects/{project_id}/repos", cookies={"session": owner_token}
+    )
+    assert owner.json()["can_edit"] is True
+    assert owner.json()["repositories"] == []
