@@ -18,6 +18,7 @@ from app.schemas.participants import (
     RelatedProject,
     RelatedTeam,
     TeamAgentAdd,
+    TeamCaptainTransfer,
     TeamCreate,
     TeamMemberPublic,
     TeamPublicResponse,
@@ -56,6 +57,17 @@ def get_event_id(db: Session) -> str:
         return event.event_id
     # Fallback to settings
     return settings.event_id
+
+
+def _require_membership_open(db: Session) -> None:
+    """Rosters move only while the gates are open — membership is sealed
+    alongside the submissions. Admin moderation paths skip this."""
+    event_state = get_event_state(db)
+    if not can_register_participant(event_state):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Team membership is sealed in {event_state} state",
+        )
 
 
 def _member_public(db: Session, m: ParticipantMember) -> TeamMemberPublic | None:
@@ -349,6 +361,7 @@ def join_team_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """Join a team using an invite code."""
+    _require_membership_open(db)
     team = get_team_by_invite_code(db, invite_code)
     if not team:
         raise HTTPException(
@@ -390,6 +403,8 @@ def enlist_agent_endpoint(
     AND own the agent — consent travels with the credential. Admins may
     enlist any active agent anywhere. Removal goes through the ordinary
     captain-only member removal."""
+    if current_user.role != "admin":
+        _require_membership_open(db)
     team = get_participant_by_id(db, team_id)
     if not team or team.type != "team":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -461,7 +476,10 @@ def remove_member_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """Remove a team member. Captains and admins may remove anyone; the
-    owner of an enlisted agent may pull their own agent's seat."""
+    owner of an enlisted agent may pull their own agent's seat. Sealed for
+    non-admins once the gates close."""
+    if current_user.role != "admin":
+        _require_membership_open(db)
     team = get_participant_by_id(db, team_id)
     if not team or team.type != "team":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -500,6 +518,7 @@ def leave_team_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     """Leave a team."""
+    _require_membership_open(db)
     team = get_participant_by_id(db, team_id)
     if not team or team.type != "team":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
@@ -530,6 +549,59 @@ def leave_team_endpoint(
         db.commit()
     
     return {"status": "success", "message": "Left team"}
+
+
+@router.post("/teams/{team_id}/captain")
+def transfer_captain_endpoint(
+    team_id: str,
+    data: TeamCaptainTransfer,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pass the captaincy to another human member of the team. Only the
+    current captain (or an admin) may pass it; agents cannot hold it. This
+    is what unblocks a captain who wants to leave."""
+    team = get_participant_by_id(db, team_id)
+    if not team or team.type != "team":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+    if current_user.role != "admin" and not is_team_captain(db, current_user.id, team_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the team captain can pass the captaincy",
+        )
+
+    member = (
+        db.query(ParticipantMember)
+        .filter(
+            ParticipantMember.id == data.member_id,
+            ParticipantMember.participant_id == team_id,
+        )
+        .first()
+    )
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    if member.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The captaincy can only pass to a human member",
+        )
+    if member.role_in_team == "captain":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That member already holds the captaincy",
+        )
+
+    for m in get_team_members(db, team_id):
+        if m.role_in_team == "captain":
+            m.role_in_team = "member"
+    member.role_in_team = "captain"
+
+    log_action(db, "team.captain_transferred", actor_id=current_user.id,
+               target_type="participant", target_id=team.id,
+               metadata={"handle": team.display_name})
+    db.commit()
+    return {"status": "success", "message": "Captaincy transferred"}
 
 
 @router.post("/teams/{team_id}/regenerate-invite", response_model=TeamResponse)
@@ -645,17 +717,24 @@ def admin_add_member(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Admin: Add a user to a team."""
+    """Admin: Add a user to a team, optionally as captain."""
     team = get_participant_by_id(db, team_id)
     if not team or team.type != "team":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    
+
+    if role_in_team not in ("captain", "member"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="role_in_team must be 'captain' or 'member'",
+        )
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
+
     try:
         member = join_team(db, user, team)
+        member.role_in_team = role_in_team
         db.commit()
         return {"status": "success", "member_id": member.id}
     except ValueError as e:

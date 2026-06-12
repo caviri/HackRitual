@@ -137,6 +137,36 @@ export default function ApplicationsPage() {
     }
   }
 
+  async function reforge(a: ApplicationDTO) {
+    if (!a.user) return;
+    if (
+      !confirm(
+        `Mint a fresh access key for "${a.name}"? The old one stops working immediately.`,
+      )
+    )
+      return;
+    setBusyId(a.id);
+    setError(null);
+    try {
+      const updated = await api.regeneratePassword(a.user.id);
+      setApplications((prev) =>
+        prev.map((x) =>
+          x.id === a.id && x.user
+            ? { ...x, user: { ...x.user, access_password: updated.access_password } }
+            : x,
+        ),
+      );
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.body || `reforge failed (${err.status})`);
+      } else {
+        setError(String(err));
+      }
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function importCsv(file: File) {
     setImporting(true);
     setError(null);
@@ -266,12 +296,22 @@ export default function ApplicationsPage() {
                 )}
 
                 {a.status === 'approved' && a.user?.access_password && (
-                  <CredentialButtons
-                    name={a.name}
-                    email={a.email}
-                    password={a.user.access_password}
-                    eventTitle={eventTitle}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CredentialButtons
+                      name={a.name}
+                      email={a.email}
+                      password={a.user.access_password}
+                      eventTitle={eventTitle}
+                    />
+                    <button
+                      type="button"
+                      disabled={busyId === a.id}
+                      onClick={() => void reforge(a)}
+                      className="btn btn-ghost !px-3 !py-1 font-mono text-[0.72rem] uppercase tracking-widest !border-warm !text-warm"
+                    >
+                      {busyId === a.id ? '…' : '↺ reforge key'}
+                    </button>
+                  </div>
                 )}
               </li>
             ))}

@@ -106,6 +106,10 @@ class TeamAgentAdd(BaseModel):
     agent_id: str
 
 
+class TeamCaptainTransfer(BaseModel):
+    member_id: str
+
+
 class ParticipantStatusUpdate(BaseModel):
     status: str = Field(..., pattern="^(active|disabled|banned)$")
 

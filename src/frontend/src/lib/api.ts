@@ -981,6 +981,7 @@ export const api = {
       await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
+        headers: stageHeaders(),
       });
     } catch {
       /* swallow — we'll reload anyway */
