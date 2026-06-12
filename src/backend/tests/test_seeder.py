@@ -254,3 +254,16 @@ async def test_demo_user_can_log_in(seeded, client):
     resp = await client.post("/api/auth/login", json={"password": "fern-lantern-4821"})
     assert resp.status_code == 200
     assert resp.json()["user"]["email"] == "ada@demo.rite"
+
+
+def test_portrait_paths_use_posix_separators(seeded):
+    from app.database import SessionLocal
+    from app.models.participant import Participant
+    from app.models.user import User
+
+    with SessionLocal() as db:
+        for u in db.query(User).filter(User.email.like("%@demo.rite")).all():
+            assert "\\" not in u.portrait_path
+            assert "\\" not in u.portrait_original_path
+        for p in db.query(Participant).filter(Participant.image.isnot(None)).all():
+            assert "\\" not in p.image
