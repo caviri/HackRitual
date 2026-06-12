@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { RitualLog } from './ritual-log';
 import { ThemeSwitcher } from './theme-switcher';
 import { getStageData, parseStageFromUrl, type LogEntry, type EventState } from '../lib/mocks';
+import { api, backendPresent, type LogEntryDTO } from '../lib/api';
 
 const LOG_LABEL: Record<EventState, string> = {
   DRAFT: 'log · circle drawn',
@@ -13,6 +14,57 @@ const LOG_LABEL: Record<EventState, string> = {
   ARCHIVED: 'log · record sealed',
 };
 
+// The audit trail speaks in dotted actions; the footer speaks liturgy.
+const VERB_FOR: Record<string, { verb: string; tone?: LogEntry['tone'] }> = {
+  'event.created': { verb: 'the circle is drawn', tone: 'primary' },
+  'event.transition': { verb: 'the ritual advanced', tone: 'primary' },
+  'event.config_updated': { verb: 'the rules were bound' },
+  'event.meta_updated': { verb: 'the rite was renamed' },
+  'page.published': { verb: 'a page was published' },
+  'application.received': { verb: 'a petition arrived', tone: 'warm' },
+  'application.approved': { verb: 'a petition was granted', tone: 'primary' },
+  'application.rejected': { verb: 'a petition was declined', tone: 'warm' },
+  'participant.reserved': { verb: 'a seat was reserved', tone: 'warm' },
+  'participant.registered': { verb: 'stepped into the circle' },
+  'team.formed': { verb: 'a team was formed', tone: 'primary' },
+  'agent.created': { verb: 'an agent was minted', tone: 'accent' },
+  'agent.key_rotated': { verb: 'an agent key was rotated' },
+  'agent.revoked': { verb: 'an agent was revoked', tone: 'warm' },
+  'project.proposed': { verb: 'proposed' },
+  'project.approved': { verb: 'a proposal was approved', tone: 'primary' },
+  'submission.offered': { verb: 'offered work' },
+  'submission.finalised': { verb: 'sealed an offering', tone: 'primary' },
+  'submission.withdrawn': { verb: 'withdrew an offering', tone: 'warm' },
+  'score.rendered': { verb: 'a verdict was rendered', tone: 'accent' },
+  'verdict.inscribed': { verb: 'the verdict was inscribed', tone: 'accent' },
+  'leaderboard.published': { verb: 'the standing was published' },
+  'export.sealed': { verb: 'the artefact was sealed', tone: 'primary' },
+  'record.closed': { verb: 'the record closed', tone: 'primary' },
+  'user.admin_seeded': { verb: 'the keeper was seeded' },
+  'user.role_changed': { verb: 'a role was recast' },
+  'user.password_regenerated': { verb: 'a key was reforged' },
+  'announcement.created': { verb: 'a dispatch was published', tone: 'primary' },
+  'announcement.updated': { verb: 'a dispatch was recast' },
+  'announcement.deleted': { verb: 'a dispatch was withdrawn', tone: 'warm' },
+  'demo.rebuilt': { verb: 'the small worlds were regrown', tone: 'accent' },
+  'users.csv_imported': { verb: 'the roster was imported' },
+};
+
+function auditToLogEntry(e: LogEntryDTO): LogEntry {
+  const mapped = VERB_FOR[e.action] ?? { verb: e.action.replace('.', ' · ') };
+  return {
+    ts: new Date(e.ts).toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+    actor: e.actor ?? 'system',
+    verb: mapped.verb,
+    object: e.summary ?? undefined,
+    tone: mapped.tone,
+  };
+}
+
 export function Footer() {
   const [entries, setEntries] = useState<LogEntry[]>(getStageData('OPEN').ritualLog);
   const [state, setState] = useState<EventState>('OPEN');
@@ -21,6 +73,16 @@ export function Footer() {
     const s = parseStageFromUrl(window.location.search);
     setState(s);
     setEntries(getStageData(s).ritualLog);
+
+    void backendPresent().then(async (present) => {
+      if (!present) return;
+      const [page, event] = await Promise.all([
+        api.logPage({ limit: 12 }),
+        api.event(),
+      ]);
+      if (event?.state) setState(event.state as EventState);
+      setEntries((page?.entries ?? []).map(auditToLogEntry));
+    });
   }, []);
 
   return (
