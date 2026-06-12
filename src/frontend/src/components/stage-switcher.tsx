@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { STATES, EventState, parseStageFromUrl } from '../lib/mocks';
-import { api } from '../lib/api';
+import { api, currentDemoStage, setDemoStage } from '../lib/api';
 
 const GLYPH: Record<EventState, string> = {
   DRAFT: '▒',
@@ -11,16 +11,6 @@ const GLYPH: Record<EventState, string> = {
   FINAL: '▰',
   ARCHIVED: '▢',
 };
-
-function readStageCookie(): EventState | null {
-  for (const part of document.cookie.split(';')) {
-    const [k, v] = part.trim().split('=');
-    if (k === 'demo_stage' && (STATES as string[]).includes(v?.toUpperCase())) {
-      return v.toUpperCase() as EventState;
-    }
-  }
-  return null;
-}
 
 /**
  * Demo bar pinned to the top of every page.
@@ -37,10 +27,12 @@ export function StageSwitcher() {
   const [mode, setMode] = useState<'mock' | 'live-stages' | 'hidden' | null>(null);
 
   useEffect(() => {
-    const urlStage = /[?&]stage=/.test(window.location.search)
-      ? parseStageFromUrl(window.location.search)
-      : null;
-    setCurrent(urlStage ?? readStageCookie() ?? 'OPEN');
+    const chosen = currentDemoStage();
+    setCurrent(
+      chosen && (STATES as string[]).includes(chosen)
+        ? (chosen as EventState)
+        : parseStageFromUrl(window.location.search),
+    );
 
     void api.health().then((h) => {
       if (h.demo_stages) setMode('live-stages');
@@ -50,14 +42,14 @@ export function StageSwitcher() {
   }, []);
 
   function go(s: EventState) {
-    document.cookie = `demo_stage=${s}; path=/; max-age=31536000; samesite=lax`;
+    setDemoStage(s);
     const url = new URL(window.location.href);
     url.searchParams.set('stage', s);
     window.location.href = url.toString();
   }
 
   function goLive() {
-    document.cookie = 'demo_stage=; path=/; max-age=0';
+    setDemoStage(null);
     const url = new URL(window.location.href);
     url.searchParams.delete('stage');
     // The stage hook pins ?stage= in sessionStorage — clear it too.

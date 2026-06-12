@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '../../../components/page-header';
 import { DitheredImage } from '../../../components/dithered-image';
-import { api, ApiError, type ProjectDTO } from '../../../lib/api';
+import { api, ApiError, requireJson, type ProjectDTO } from '../../../lib/api';
 
 type Filter = 'proposed' | 'approved' | 'rejected' | 'all';
 
@@ -34,14 +34,11 @@ export default function ProposalsPage() {
     setBusyId(p.id);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${p.id}/status`, {
+      const updated = await requireJson<ProjectDTO>(`/api/projects/${p.id}/status`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ status }),
       });
-      if (!res.ok) throw new ApiError(res.status, await res.text());
-      const updated = (await res.json()) as ProjectDTO;
       setProjects((prev) =>
         prev.map((x) => (x.id === updated.id ? updated : x)),
       );

@@ -410,10 +410,53 @@ export interface AdminUserDTO {
 
 const BASE = '';
 
+const STAGE_NAMES = ['DRAFT', 'OPEN', 'FROZEN', 'FINAL', 'ARCHIVED'];
+const STAGE_STORAGE_KEY = 'hackritual:demo_stage';
+
+/** The visitor's chosen demo stage: URL ?stage= wins, then localStorage,
+ * then the legacy cookie. Cookies die inside the huggingface.co iframe
+ * (third-party, SameSite), so the choice rides as a header on every call. */
+export function currentDemoStage(): string | null {
+  if (typeof window === 'undefined') return null;
+  const m = /[?&]stage=([A-Za-z]+)/.exec(window.location.search);
+  if (m && STAGE_NAMES.includes(m[1].toUpperCase())) return m[1].toUpperCase();
+  try {
+    const stored = window.localStorage.getItem(STAGE_STORAGE_KEY);
+    if (stored && STAGE_NAMES.includes(stored)) return stored;
+  } catch {
+    /* storage unavailable — fall through */
+  }
+  for (const part of document.cookie.split(';')) {
+    const [k, v] = part.trim().split('=');
+    if (k === 'demo_stage' && v && STAGE_NAMES.includes(v.toUpperCase())) {
+      return v.toUpperCase();
+    }
+  }
+  return null;
+}
+
+export function setDemoStage(stage: string | null): void {
+  try {
+    if (stage) window.localStorage.setItem(STAGE_STORAGE_KEY, stage);
+    else window.localStorage.removeItem(STAGE_STORAGE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  // Cookie kept as a best-effort backup for first-party contexts.
+  document.cookie = stage
+    ? `demo_stage=${stage}; path=/; max-age=31536000; samesite=lax`
+    : 'demo_stage=; path=/; max-age=0';
+}
+
+function stageHeaders(): Record<string, string> {
+  const stage = currentDemoStage();
+  return stage ? { 'x-demo-stage': stage } : {};
+}
+
 export async function fetchJson<T>(path: string, fallback: T): Promise<T> {
   try {
     const res = await fetch(`${BASE}${path}`, {
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...stageHeaders() },
       credentials: 'include',
     });
     if (!res.ok) return fallback;
@@ -428,14 +471,24 @@ export async function requireJson<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { accept: 'application/json', ...(init.headers ?? {}) },
-    credentials: 'include',
     ...init,
+    headers: { accept: 'application/json', ...stageHeaders(), ...(init.headers ?? {}) },
+    credentials: 'include',
   });
   if (!res.ok) {
     throw new ApiError(res.status, await res.text().catch(() => ''));
   }
   return (await res.json()) as T;
+}
+
+/** DELETE that expects 204 — shares the stage header and error semantics. */
+async function deleteVoid(path: string): Promise<void> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'DELETE',
+    headers: stageHeaders(),
+    credentials: 'include',
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
 }
 
 let _backendPresent: Promise<boolean> | null = null;
@@ -446,7 +499,7 @@ let _backendPresent: Promise<boolean> | null = null;
 export function backendPresent(): Promise<boolean> {
   if (_backendPresent === null) {
     _backendPresent = fetch(`${BASE}/api/health`, {
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...stageHeaders() },
       credentials: 'include',
     })
       .then(async (res) => {
@@ -515,11 +568,7 @@ export const api = {
     }),
 
   deleteTrack: async (id: string) => {
-    const res = await fetch(`/api/tracks/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/tracks/${id}`);
   },
 
   createPhase: (input: {
@@ -550,11 +599,7 @@ export const api = {
     }),
 
   deletePhase: async (id: string) => {
-    const res = await fetch(`/api/phases/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/phases/${id}`);
   },
 
   createPage: (input: {
@@ -587,11 +632,7 @@ export const api = {
     }),
 
   deletePage: async (id: string) => {
-    const res = await fetch(`/api/pages/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/pages/${id}`);
   },
 
   projects: (track?: string) =>
@@ -675,11 +716,7 @@ export const api = {
     }),
 
   deleteAnnouncement: async (id: string) => {
-    const res = await fetch(`/api/admin/announcements/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/admin/announcements/${id}`);
   },
 
   adminApplications: (status?: ApplicationStatus) =>
@@ -770,12 +807,7 @@ export const api = {
     }),
 
   deleteAgent: async (id: string) => {
-    const res = await fetch(`/api/agents/${id}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok)
-      throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/agents/${id}`);
   },
 
   // ── admin
@@ -853,12 +885,7 @@ export const api = {
     }),
 
   detachRepo: async (projectId: string, repoId: string) => {
-    const res = await fetch(`/api/projects/${projectId}/repos/${repoId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok)
-      throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/projects/${projectId}/repos/${repoId}`);
   },
 
   participantFeed: (participantId: string) =>
@@ -936,12 +963,7 @@ export const api = {
     }),
 
   deleteScore: async (scoreId: string) => {
-    const res = await fetch(`/api/scores/${scoreId}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    });
-    if (!res.ok)
-      throw new ApiError(res.status, await res.text().catch(() => ''));
+    await deleteVoid(`/api/scores/${scoreId}`);
   },
 
   logout: async () => {

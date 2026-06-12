@@ -39,6 +39,13 @@ _COOKIE_MAX_AGE = 86400  # 24 h
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
+    """Issue the session cookie.
+
+    On https deployments the cookie is SameSite=None so sessions survive the
+    huggingface.co iframe (third-party context drops Lax cookies); None
+    requires Secure, so http dev keeps Lax. If Chrome completes third-party
+    cookie removal, the CHIPS `Partitioned` attribute is the successor.
+    """
     from app.config import settings
 
     secure = settings.app_base_url.startswith("https://")
@@ -47,7 +54,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         secure=secure,
-        samesite="lax",
+        samesite="none" if secure else "lax",
         max_age=_COOKIE_MAX_AGE,
         path="/",
     )

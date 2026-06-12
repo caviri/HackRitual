@@ -363,3 +363,36 @@ def test_log_feed_tops_with_stage_story_not_build_time(demo_mode):
         for a in approvals:
             # Granted inside the event window, not at build wall-clock time.
             assert ev.start_at <= a.created_at <= ev.end_at
+
+
+@pytest.mark.anyio
+async def test_header_routes_to_stage(demo_client):
+    resp = await demo_client.get(
+        "/api/event", headers={"x-demo-stage": "FROZEN"}
+    )
+    assert resp.json()["state"] == "FROZEN"
+
+
+@pytest.mark.anyio
+async def test_query_beats_header_beats_cookie(demo_client):
+    resp = await demo_client.get(
+        "/api/event?stage=DRAFT",
+        headers={"x-demo-stage": "FROZEN"},
+        cookies={"demo_stage": "OPEN"},
+    )
+    assert resp.json()["state"] == "DRAFT"
+
+    resp = await demo_client.get(
+        "/api/event",
+        headers={"x-demo-stage": "FROZEN"},
+        cookies={"demo_stage": "OPEN"},
+    )
+    assert resp.json()["state"] == "FROZEN"
+
+
+@pytest.mark.anyio
+async def test_invalid_header_falls_to_primary(demo_client):
+    resp = await demo_client.get(
+        "/api/event", headers={"x-demo-stage": "banana"}
+    )
+    assert resp.json()["state"] == _primary_state()
