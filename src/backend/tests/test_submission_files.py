@@ -242,6 +242,27 @@ class TestDelete:
 
 
 @pytest.mark.anyio
+async def test_image_upload_blocked_when_not_open(client):
+    """POST /api/uploads obeys the same gate as the attach endpoint."""
+    import io
+
+    _set_event("OPEN")
+    token, pid = _make_participant()
+    sub = _make_submission(pid)
+    _set_event("FROZEN")
+
+    png = io.BytesIO(b"0" * 64)  # auth/state checks fire before decoding
+    resp = await client.post(
+        "/api/uploads",
+        files={"file": ("x.png", png, "image/png")},
+        data={"submission_id": sub, "participant_id": pid},
+        cookies={"session": token},
+    )
+    assert resp.status_code == status.HTTP_409_CONFLICT
+    _set_event("OPEN")
+
+
+@pytest.mark.anyio
 async def test_stranger_cannot_upload_image_to_others_submission(client):
     """POST /api/uploads must reject users outside the submission's participant."""
     import io

@@ -6,10 +6,12 @@ import { PageHeader } from '../../components/page-header';
 import {
   api,
   ApiError,
+  type ImageEffect,
   type MeDTO,
   type ProjectDTO,
   type ScoreDTO,
   type SubmissionDTO,
+  type SubmissionFileDTO,
   type SubmissionStatus,
 } from '../../lib/api';
 
@@ -46,6 +48,13 @@ export default function SubmissionByQueryPage() {
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
+  // Plates & evidence — attachments listed publicly by metadata; the bytes
+  // stream through the gated download URL (owner/admin only).
+  const [files, setFiles] = useState<SubmissionFileDTO[]>([]);
+  const [effect, setEffect] = useState<ImageEffect>('dither');
+  const [uploading, setUploading] = useState(false);
+  const [plateError, setPlateError] = useState<string | null>(null);
+
   useEffect(() => {
     const u = new URL(window.location.href);
     const sid = u.searchParams.get('id');
@@ -65,6 +74,7 @@ export default function SubmissionByQueryPage() {
         setTitle(submission.title ?? '');
         setDescription(submission.description ?? '');
         setResult(submission.result ?? '');
+        void api.submissionFiles(sid).then(setFiles);
         if (submission.project_id) {
           void api.project(submission.project_id).then(setProject);
         }
@@ -120,6 +130,43 @@ export default function SubmissionByQueryPage() {
       setError(e instanceof ApiError ? e.body || `save failed (${e.status})` : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function uploadPlate(file: File) {
+    if (!sub) return;
+    setUploading(true);
+    setPlateError(null);
+    try {
+      await api.uploadImage(file, sub.id, sub.participant_id, effect);
+      setFiles(await api.submissionFiles(sub.id));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setPlateError('the forge is not open — plates land while the event is OPEN.');
+      } else {
+        setPlateError(
+          e instanceof ApiError ? e.body || `upload failed (${e.status})` : String(e),
+        );
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removePlate(f: SubmissionFileDTO) {
+    if (!sub) return;
+    if (!confirm(`Remove "${f.filename}" from this submission?`)) return;
+    setUploading(true);
+    setPlateError(null);
+    try {
+      await api.deleteSubmissionFile(sub.id, f.id);
+      setFiles((prev) => prev.filter((x) => x.id !== f.id));
+    } catch (e) {
+      setPlateError(
+        e instanceof ApiError ? e.body || `remove failed (${e.status})` : String(e),
+      );
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -268,6 +315,117 @@ export default function SubmissionByQueryPage() {
               </dl>
             )}
           </article>
+
+          {/* plates & evidence */}
+          {(files.length > 0 || canEdit) && (
+            <article className="ascii-frame p-6">
+              <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-4">
+                plates &amp; evidence · {files.length}
+              </p>
+
+              {files.length === 0 ? (
+                <p className="ritual text-fg-muted text-[0.95rem] mb-4">
+                  Nothing attached yet. The scorer weighs completeness — a
+                  plate or a report strengthens the verdict.
+                </p>
+              ) : (
+                <ul className="grid gap-3 sm:grid-cols-2 mb-4">
+                  {files.map((f) => {
+                    const isImage = f.mime_type.startsWith('image/');
+                    const canSeeBlob = isOwner || me?.role === 'admin';
+                    const blobUrl = `/api/submissions/${sub.id}/files/${f.id}`;
+                    return (
+                      <li key={f.id} className="border border-rule overflow-hidden">
+                        {isImage && canSeeBlob && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={blobUrl}
+                            alt={f.filename}
+                            className="w-full aspect-[3/2] object-cover"
+                          />
+                        )}
+                        <div className="p-3 flex items-baseline justify-between gap-2">
+                          <div className="min-w-0">
+                            {canSeeBlob ? (
+                              <a
+                                href={blobUrl}
+                                className="font-mono text-[0.78rem] text-fg hover:text-primary truncate block"
+                              >
+                                {f.filename}
+                              </a>
+                            ) : (
+                              <p className="font-mono text-[0.78rem] text-fg truncate">
+                                {f.filename}
+                              </p>
+                            )}
+                            <p className="font-mono text-[0.66rem] uppercase tracking-wider text-fg-dim">
+                              {f.mime_type} · {(f.size_bytes / 1024).toFixed(1)} kb
+                            </p>
+                          </div>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              disabled={uploading}
+                              onClick={() => void removePlate(f)}
+                              className="font-mono text-[0.72rem] text-danger hover:underline shrink-0"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              {canEdit && (
+                <div className="pt-4 border-t border-rule space-y-3">
+                  <div className="flex flex-wrap items-center gap-2 font-mono text-[0.72rem] uppercase tracking-widest">
+                    <span className="text-fg-dim">effect</span>
+                    {(['dither', 'halftone', 'none'] as ImageEffect[]).map((fx) => (
+                      <button
+                        key={fx}
+                        type="button"
+                        onClick={() => setEffect(fx)}
+                        className={`border px-2.5 py-1 transition-colors ${
+                          effect === fx
+                            ? 'border-primary text-primary'
+                            : 'border-rule text-fg-muted hover:text-fg'
+                        }`}
+                      >
+                        {fx}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void uploadPlate(f);
+                      e.target.value = '';
+                    }}
+                    className="font-mono text-[0.78rem] text-fg-muted file:btn file:btn-ghost file:mr-4 file:font-mono file:text-[0.72rem] file:uppercase file:tracking-widest"
+                  />
+                  {uploading && (
+                    <p className="font-mono text-[0.72rem] text-warm">▸ forging the plate…</p>
+                  )}
+                  <p className="font-mono text-[0.7rem] text-fg-dim">
+                    ▒ images are re-struck server-side (max 6 mb) and count
+                    toward the completeness score
+                  </p>
+                </div>
+              )}
+
+              {plateError && (
+                <p className="ascii-frame !border-danger px-3 py-2 mt-3 font-mono text-[0.78rem] text-danger">
+                  ✕ {plateError}
+                </p>
+              )}
+            </article>
+          )}
 
           {/* scores when final */}
           {scores.length > 0 && (
