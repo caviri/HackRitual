@@ -151,7 +151,6 @@ def get_status() -> dict:
     event_id = "unknown"
     try:
         from app.config import settings
-        from app.database import SessionLocal
         from app.models.event import Event
 
         event_id = settings.event_id

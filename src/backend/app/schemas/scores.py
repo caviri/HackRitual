@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -17,9 +16,9 @@ class ScoreCreate(BaseModel):
     average of the breakdown.
     """
 
-    score_value: Optional[float] = Field(None, ge=0, le=100)
-    breakdown: Optional[dict[str, float]] = None
-    notes: Optional[str] = None
+    score_value: float | None = Field(None, ge=0, le=100)
+    breakdown: dict[str, float] | None = None
+    notes: str | None = None
 
 
 class ScoreResponse(BaseModel):
@@ -27,15 +26,15 @@ class ScoreResponse(BaseModel):
     submission_id: str
     score_value: float
     breakdown: dict[str, float] = {}
-    notes: Optional[str] = None
+    notes: str | None = None
     status: str
-    scorer_version: Optional[str] = None
-    scored_at: Optional[datetime] = None
+    scorer_version: str | None = None
+    scored_at: datetime | None = None
 
 
 class ScoreOverride(BaseModel):
     """Admin manual override of a score (Step 08), recorded in the audit log."""
 
-    score_value: Optional[float] = Field(None, ge=0, le=100)
-    status: Optional[str] = None  # scored | failed | disqualified
-    reason: Optional[str] = None
+    score_value: float | None = Field(None, ge=0, le=100)
+    status: str | None = None  # scored | failed | disqualified
+    reason: str | None = None

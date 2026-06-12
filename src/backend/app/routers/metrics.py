@@ -9,7 +9,6 @@ for programmatic consumers (the human page lives in the frontend at `/privacy`).
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -25,8 +24,8 @@ privacy_router = APIRouter(prefix="/api", tags=["privacy"])
 
 @admin_metrics_router.get("")
 def metrics(
-    start: Optional[str] = Query(None, description="YYYY-MM-DD (default: 30 days ago)"),
-    end: Optional[str] = Query(None, description="YYYY-MM-DD (default: today)"),
+    start: str | None = Query(None, description="YYYY-MM-DD (default: 30 days ago)"),
+    end: str | None = Query(None, description="YYYY-MM-DD (default: today)"),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ) -> dict:
@@ -44,8 +43,8 @@ def metrics(
 
 @admin_metrics_router.get("/daily")
 def metrics_daily(
-    start: Optional[str] = Query(None),
-    end: Optional[str] = Query(None),
+    start: str | None = Query(None),
+    end: str | None = Query(None),
     db: Session = Depends(get_db),
     _admin: User = Depends(require_admin),
 ) -> list[dict]:

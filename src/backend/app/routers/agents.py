@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 import secrets
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
@@ -53,7 +52,6 @@ from app.services.event import get_event, load_config
 from app.services.leaderboard import build_leaderboard
 from app.services.scoring_service import active_score, score_submission
 
-
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 self_router = APIRouter(prefix="/api/agent", tags=["agents"])
 admin_router = APIRouter(prefix="/api/admin/agents", tags=["agents"])
@@ -80,7 +78,7 @@ def _key_preview(plaintext: str) -> str:
     return f"…{plaintext[-4:]}" if len(plaintext) >= 4 else "…????"
 
 
-def _agent_to_response(agent: Agent, db: Session, key_plain: Optional[str] = None) -> AgentResponse:
+def _agent_to_response(agent: Agent, db: Session, key_plain: str | None = None) -> AgentResponse:
     owner_email = None
     if agent.owner_user_id:
         owner = db.get(User, agent.owner_user_id)
@@ -326,6 +324,9 @@ def agent_create_submission(
     from app.services import metrics_service
 
     metrics_service.increment(db, "agent_submissions_count")
+    log_action(db, "submission.offered", target_type="submission",
+               target_id=sub.id,
+               metadata={"title": sub.title, "version": sub.version})
     db.commit()
     db.refresh(sub)
     return sub

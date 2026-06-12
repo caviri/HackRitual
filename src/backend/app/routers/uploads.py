@@ -26,7 +26,6 @@ from app.models.user import User
 from app.schemas.uploads import UploadResponse
 from app.services import images as image_service
 
-
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
 ALLOWED_MIME = {"image/png", "image/jpeg", "image/webp", "image/gif"}
@@ -52,6 +51,18 @@ async def upload_image(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             f"only images allowed ({sorted(ALLOWED_MIME)})",
         )
+    # The submission must exist, belong to the claimed participant, and the
+    # uploader must be one of its people (or the keeper) — any signed-in user
+    # could previously attach images to anyone's submission.
+    from app.middleware.actor import Actor
+    from app.models.submission import Submission
+    from app.services.submissions import assert_can_act_on
+
+    submission = db.get(Submission, submission_id)
+    if submission is None or submission.participant_id != participant_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
+    assert_can_act_on(db, Actor(user=user), submission)
+
     raw = await file.read()
     if len(raw) == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "empty upload")

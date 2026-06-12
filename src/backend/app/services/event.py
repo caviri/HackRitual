@@ -15,7 +15,7 @@ explicitly (`confirm=True`) because it undoes a closing of the gates.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -183,7 +183,7 @@ def next_auto_state(
     """
     # Normalise to aware UTC so naive DB timestamps compare cleanly.
     def _aware(dt: datetime) -> datetime:
-        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
 
     now, start, end = _aware(now), _aware(start), _aware(end)
     if state == "DRAFT" and now >= start:

@@ -18,7 +18,7 @@ from __future__ import annotations
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -29,7 +29,6 @@ from app.middleware.auth import get_current_user
 from app.models.user import User
 from app.schemas.auth import MeResponse, PortraitInfo
 from app.services import images as image_service
-
 
 router = APIRouter(prefix="/api/me", tags=["me"])
 
@@ -43,7 +42,7 @@ def _portrait_root(user_id: str) -> Path:
 
 
 def _build_me_response(user: User) -> MeResponse:
-    portrait: Optional[PortraitInfo] = None
+    portrait: PortraitInfo | None = None
     if user.portrait_path:
         portrait = PortraitInfo(
             url=f"/uploads/{user.portrait_path}",
@@ -69,8 +68,8 @@ def _process_and_save(
     contrast: float,
     brightness: int,
     scale: float,
-    new_original_bytes: Optional[bytes] = None,
-    new_original_suffix: Optional[str] = None,
+    new_original_bytes: bytes | None = None,
+    new_original_suffix: str | None = None,
 ) -> User:
     """Run the image pipeline and persist the result.
 

@@ -10,7 +10,7 @@ import io
 import json
 import uuid
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -32,8 +32,8 @@ def _set_event(state: str = "FINAL", config: dict | None = None) -> None:
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(event)
         event.state = state

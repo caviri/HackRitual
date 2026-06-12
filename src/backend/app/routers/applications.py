@@ -84,6 +84,10 @@ def submit_application(
         )
     except app_svc.ApplicationError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    from app.services.audit import log_action
+
+    log_action(db, "application.received", target_type="application",
+               target_id=application.id, metadata={"name": application.name})
     db.commit()
     return ApplicationCreatedResponse(id=application.id, status=application.status)
 

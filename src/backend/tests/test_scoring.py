@@ -8,7 +8,7 @@ get-score / rescore / override endpoints, and the leaderboard service
 
 import json
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import status
@@ -30,8 +30,8 @@ def _set_event(state: str = "OPEN", config: dict | None = None) -> None:
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(event)
         event.state = state

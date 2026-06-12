@@ -23,7 +23,7 @@ from app.scoring import BaseScorer, DefaultScorer
 _wasm_cache: dict[str, BaseScorer] = {}
 
 
-def get_scorer(db: "Session | None" = None) -> BaseScorer:
+def get_scorer(db: Session | None = None) -> BaseScorer:
     """
     Return the active scorer.
 
@@ -33,8 +33,8 @@ def get_scorer(db: "Session | None" = None) -> BaseScorer:
     if db is None:
         return DefaultScorer()
     try:
-        from app.services import wasm_store
         from app.scoring.wasm_scorer import WasmScorer, wasmtime_available
+        from app.services import wasm_store
 
         scorer_ref = wasm_store.get_active_scorer(db)
         if scorer_ref and scorer_ref.get("type") == "wasm" and wasmtime_available():

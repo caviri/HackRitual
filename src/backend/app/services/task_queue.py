@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -30,8 +29,8 @@ TASK_TYPES = ("score_submission", "export_bundle", "push_github")
 def enqueue(
     db: Session,
     task_type: str,
-    ref_id: Optional[str] = None,
-    payload: Optional[dict] = None,
+    ref_id: str | None = None,
+    payload: dict | None = None,
     delay_seconds: int = 0,
     max_attempts: int = 3,
 ) -> Task:
@@ -52,7 +51,7 @@ def enqueue(
     return task
 
 
-def claim_next(db: Session, now: Optional[datetime] = None) -> Optional[Task]:
+def claim_next(db: Session, now: datetime | None = None) -> Task | None:
     """
     Claim the oldest due `queued` task, flipping it to `running`.
 
@@ -159,7 +158,7 @@ def list_failed(db: Session, limit: int = 50) -> list[Task]:
     )
 
 
-def retry_task(db: Session, task_id: str) -> Optional[Task]:
+def retry_task(db: Session, task_id: str) -> Task | None:
     """Resurrect a dead task: back to queued, attempts reset, available now."""
     task = db.get(Task, task_id)
     if task is None:

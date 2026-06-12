@@ -14,8 +14,11 @@ export default function NewProjectPage() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; title: string } | null>(null);
 
+  const [participantId, setParticipantId] = useState<string | null>(null);
+
   useEffect(() => {
     void api.tracks().then(setTracks);
+    void api.me().then((m) => setParticipantId(m?.participant?.id ?? null));
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -27,18 +30,25 @@ export default function NewProjectPage() {
     setError(null);
     setBusy(true);
     try {
-      // The real proposed_by_participant_id will come from session in prod —
-      // for demo we pass a sentinel and let the server reject gracefully.
+      if (!participantId) {
+        // Live backend but no participant on the session yet.
+        const live = await import('../../../lib/api').then((m) => m.backendPresent());
+        if (live) {
+          setError('sign in first — proposals are bound to your participant.');
+          setBusy(false);
+          return;
+        }
+      }
       const result = await api.createProject({
         title,
         description,
         track_id: trackId || undefined,
-        proposed_by_participant_id: 'demo-participant',
+        proposed_by_participant_id: participantId ?? 'demo-participant',
       });
       setCreated({ id: result.id, title: result.title });
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setError('you must be signed in to propose a project.');
+      if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+        setError('you must be signed in (with your own participant) to propose.');
       } else if (err instanceof ApiError) {
         setError(err.body || `proposal failed (${err.status})`);
       } else {

@@ -5,7 +5,7 @@ linking, API-key auth, revocation, and the agent submission/leaderboard API.
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -31,8 +31,8 @@ def _set_event(state: str = "OPEN", policy: str = "allowed") -> None:
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(ev)
         ev.state = state
@@ -93,9 +93,9 @@ class TestAgentCreation:
         assert me.json()["name"] == "scout"
 
         # A linked agent-type participant now exists.
-        from app.services.agents import agent_participant
         from app.database import SessionLocal
         from app.models.agent import Agent
+        from app.services.agents import agent_participant
 
         with SessionLocal() as db:
             agent = db.get(Agent, body["agent"]["id"])

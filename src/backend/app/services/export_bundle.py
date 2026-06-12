@@ -21,7 +21,6 @@ import json
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -56,14 +55,14 @@ class RedactionConfig:
 
 def email_hash(email: str, event_id: str) -> str:
     """Stable within an event, irreversible. `sha256(email + event_id)[:16]`."""
-    return hashlib.sha256(f"{email}{event_id}".encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(f"{email}{event_id}".encode()).hexdigest()[:16]
 
 
-def _iso(dt: Optional[datetime]) -> Optional[str]:
+def _iso(dt: datetime | None) -> str | None:
     return dt.isoformat() if dt else None
 
 
-def _participant_email(db: Session, participant_id: str) -> Optional[str]:
+def _participant_email(db: Session, participant_id: str) -> str | None:
     """The email of a participant's first human member, if any."""
     member = (
         db.query(ParticipantMember)

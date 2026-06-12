@@ -7,6 +7,7 @@ what we need to exercise the full host↔module round-trip deterministically.
 """
 
 import uuid
+from datetime import UTC
 
 import pytest
 from fastapi import status
@@ -44,14 +45,14 @@ def _set_event(state: str = "OPEN") -> None:
     with SessionLocal() as db:
         ev = db.get(Event, settings.event_id)
         if ev is None:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             ev = Event(
                 id=settings.event_id,
                 title="Test",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(ev)
         ev.state = state

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -48,12 +47,12 @@ def save_wasm(data: bytes) -> tuple[str, str]:
 # --------------------------------------------------------------------------- #
 # Active-scorer reference (lives in event config)
 # --------------------------------------------------------------------------- #
-def get_active_scorer(db: Session) -> Optional[dict]:
+def get_active_scorer(db: Session) -> dict | None:
     """The event's configured scorer, or None (→ default Python scorer)."""
     return load_config(get_event(db)).get("scorer")
 
 
-def set_active_scorer(db: Session, scorer: Optional[dict]) -> None:
+def set_active_scorer(db: Session, scorer: dict | None) -> None:
     event = get_event(db)
     config = load_config(event)
     if scorer is None:
@@ -64,7 +63,7 @@ def set_active_scorer(db: Session, scorer: Optional[dict]) -> None:
     db.commit()
 
 
-def load_wasm_bytes(scorer: dict) -> Optional[bytes]:
+def load_wasm_bytes(scorer: dict) -> bytes | None:
     """Read the module bytes for a wasm scorer reference, if present on disk."""
     path = scorer.get("path")
     if not path:

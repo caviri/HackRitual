@@ -26,8 +26,8 @@ from __future__ import annotations
 import asyncio
 import io
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
 
 from httpx import ASGITransport, AsyncClient
 
@@ -50,7 +50,7 @@ class Agent:
     email: str
     kind: str  # "human" | "agent"
     token: str = ""
-    participant_id: Optional[str] = None
+    participant_id: str | None = None
 
     @property
     def headers(self) -> dict:
@@ -164,10 +164,10 @@ class Ritual:
         self.narrator = narrator
         self.report = RitualReport()
         self.admin_headers: dict = {}
-        self.team_invite: Optional[str] = None
-        self.team_id: Optional[str] = None
-        self.marrow_project: Optional[str] = None  # reused to test the FROZEN ward
-        self.sealed_submission_id: Optional[str] = None  # the team's final offering
+        self.team_invite: str | None = None
+        self.team_id: str | None = None
+        self.marrow_project: str | None = None  # reused to test the FROZEN ward
+        self.sealed_submission_id: str | None = None  # the team's final offering
 
     # -- narration helpers --------------------------------------------------- #
     def _say(self, kind: str, message: str) -> None:
@@ -272,7 +272,7 @@ class Ritual:
                     self.report.members_joined += 1
                     self._say("act", f"{joiner.name} joins 'the_owls'.")
 
-    async def _propose(self, agent: Agent, participant_id: str, title: str, desc: str) -> Optional[str]:
+    async def _propose(self, agent: Agent, participant_id: str, title: str, desc: str) -> str | None:
         r = await self.client.post(
             "/api/projects",
             json={
@@ -290,7 +290,7 @@ class Ritual:
 
     async def _offer(
         self, agent: Agent, project_id: str, participant_id: str, title: str, result: str
-    ) -> Optional[str]:
+    ) -> str | None:
         r = await self.client.post(
             "/api/submissions",
             json={
@@ -615,12 +615,11 @@ async def run_ritual(narrator: Narrator = _noop, fresh: bool = True) -> RitualRe
     :class:`RitualReport` describing what happened — assert on it in tests, or
     narrate it on the way past for a demo.
     """
-    from app.database import Base, engine
-    from app.main import create_app
-
     # Ensure the schema exists so the tool runs standalone (no-op on a
     # migrated DB). Importing app.models registers every table on Base.
     import app.models  # noqa: F401
+    from app.database import Base, engine
+    from app.main import create_app
     Base.metadata.create_all(engine)
 
     _ensure_event(fresh=fresh)

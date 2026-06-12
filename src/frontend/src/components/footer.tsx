@@ -32,6 +32,9 @@ const VERB_FOR: Record<string, { verb: string; tone?: LogEntry['tone'] }> = {
   'agent.revoked': { verb: 'an agent was revoked', tone: 'warm' },
   'project.proposed': { verb: 'proposed' },
   'project.approved': { verb: 'a proposal was approved', tone: 'primary' },
+  'project.rejected': { verb: 'a proposal was declined', tone: 'warm' },
+  'team.joined': { verb: 'joined a team' },
+  'team.left': { verb: 'left a team', tone: 'warm' },
   'submission.offered': { verb: 'offered work' },
   'submission.finalised': { verb: 'sealed an offering', tone: 'primary' },
   'submission.withdrawn': { verb: 'withdrew an offering', tone: 'warm' },
@@ -74,15 +77,29 @@ export function Footer() {
     setState(s);
     setEntries(getStageData(s).ritualLog);
 
+    let timer: ReturnType<typeof setInterval> | null = null;
     void backendPresent().then(async (present) => {
       if (!present) return;
-      const [page, event] = await Promise.all([
-        api.logPage({ limit: 12 }),
-        api.event(),
-      ]);
-      if (event?.state) setState(event.state as EventState);
-      setEntries((page?.entries ?? []).map(auditToLogEntry));
+      const load = async () => {
+        const [page, event] = await Promise.all([
+          api.logPage({ limit: 12 }),
+          api.event(),
+        ]);
+        if (event?.state) setState(event.state as EventState);
+        const next = (page?.entries ?? []).map(auditToLogEntry);
+        // Only swap when something actually changed — the widget replays its
+        // reveal animation on every new entries array.
+        setEntries((prev) =>
+          JSON.stringify(prev) === JSON.stringify(next) ? prev : next,
+        );
+      };
+      await load();
+      // The log is alive: keep tailing while the page is open.
+      timer = setInterval(() => void load(), 30_000);
     });
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   return (

@@ -4,7 +4,7 @@ dashboard, the cleanup sweep, and the structured privacy endpoint.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi import status
@@ -132,8 +132,8 @@ class TestIncrementWiring:
             if ev is None:
                 ev = Event(
                     id=settings.event_id, title="T", type="hackathon",
-                    start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                    end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                    start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                    end_at=datetime(2026, 1, 2, tzinfo=UTC),
                 )
                 db.add(ev)
             ev.state = "OPEN"
@@ -168,6 +168,7 @@ class TestIncrementWiring:
 class TestCleanup:
     def test_cleanup_removes_expired(self):
         import uuid as _uuid
+
         from app.database import SessionLocal
         from app.models.session import Session as SessionModel
         from app.models.user import User
@@ -180,7 +181,7 @@ class TestCleanup:
             db.add(
                 SessionModel(
                     user_id=u.id,
-                    expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+                    expires_at=datetime.now(UTC) - timedelta(minutes=1),
                 )
             )
             db.commit()

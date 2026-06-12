@@ -34,7 +34,6 @@ from app.models.submission import Submission
 from app.models.track import Track
 from app.models.user import User
 
-
 # Cap an individual portrait at ~30 KB so a malicious upload can't bloat the
 # showcase. Dithered PNGs are typically 2–8 KB, so this is generous.
 _PORTRAIT_MAX_BYTES = 30 * 1024
