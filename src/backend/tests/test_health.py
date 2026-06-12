@@ -49,8 +49,9 @@ async def test_health_db_not_ok_with_bad_path(monkeypatch, _set_env):
     original = h._check_db
     monkeypatch.setattr(h, "_check_db", lambda _: False)
 
+    from httpx import ASGITransport, AsyncClient
+
     from app.main import create_app
-    from httpx import AsyncClient, ASGITransport
 
     app = create_app()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

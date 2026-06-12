@@ -123,7 +123,7 @@ function buildLiveView(
     track: trackName(p.track_id),
   }));
 
-  const active = parts.filter((pa) => !(pa as { is_waiting?: boolean }).is_waiting);
+  const active = parts.filter((pa) => !pa.is_waiting);
   const waiting = parts.length - active.length;
   const participants: ParticipantMock[] = parts.slice(0, 6).map((pa) => ({
     handle: pa.display_name,
@@ -131,8 +131,8 @@ function buildLiveView(
       | 'human'
       | 'agent'
       | 'team',
-    meta: (pa as { affiliation?: string | null }).affiliation ?? pa.type,
-    waitlist: Boolean((pa as { is_waiting?: boolean }).is_waiting),
+    meta: pa.affiliation ?? pa.type,
+    waitlist: Boolean(pa.is_waiting),
   }));
 
   const tracks: TrackMock[] = tracksDto.map((t, i) => ({

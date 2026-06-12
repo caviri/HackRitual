@@ -94,6 +94,7 @@ export interface SubmissionDTO {
 
 export interface ParticipantDTO {
   image?: string | null;
+  is_waiting?: boolean;
   id: string;
   event_id: string;
   type: 'human' | 'agent' | 'team';
@@ -101,7 +102,6 @@ export interface ParticipantDTO {
   affiliation: string | null;
   links?: string[] | null;
   status: string;
-  is_waiting?: boolean;
   created_at?: string;
 }
 
@@ -499,6 +499,101 @@ export const api = {
   phases: () => fetchJson<PhaseDTO[]>('/api/phases', []),
   pages: () => fetchJson<PageDTO[]>('/api/pages', []),
 
+  // ── admin content CRUD (tracks / phases / pages)
+  createTrack: (input: { name: string; description?: string | null }) =>
+    requireJson<TrackDTO>('/api/tracks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  updateTrack: (id: string, input: { name?: string; description?: string | null }) =>
+    requireJson<TrackDTO>(`/api/tracks/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  deleteTrack: async (id: string) => {
+    const res = await fetch(`/api/tracks/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
+  createPhase: (input: {
+    name: string;
+    description?: string | null;
+    starts_at?: string | null;
+    ends_at?: string | null;
+  }) =>
+    requireJson<PhaseDTO>('/api/phases', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  updatePhase: (
+    id: string,
+    input: {
+      name?: string;
+      description?: string | null;
+      starts_at?: string | null;
+      ends_at?: string | null;
+    },
+  ) =>
+    requireJson<PhaseDTO>(`/api/phases/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  deletePhase: async (id: string) => {
+    const res = await fetch(`/api/phases/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
+  createPage: (input: {
+    title: string;
+    content: string;
+    visible?: boolean;
+    order?: number;
+    phase_id?: string | null;
+  }) =>
+    requireJson<PageDTO>('/api/pages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  updatePage: (
+    id: string,
+    input: {
+      title?: string;
+      content?: string;
+      visible?: boolean;
+      order?: number;
+      phase_id?: string | null;
+    },
+  ) =>
+    requireJson<PageDTO>(`/api/pages/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
+
+  deletePage: async (id: string) => {
+    const res = await fetch(`/api/pages/${id}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.text().catch(() => ''));
+  },
+
   projects: (track?: string) =>
     fetchJson<ProjectDTO[]>(
       '/api/projects' + (track ? `?track_id=${encodeURIComponent(track)}` : ''),
@@ -547,6 +642,13 @@ export const api = {
 
   // Public team roster — members by display name, no emails or invite codes.
   teams: () => fetchJson<TeamDTO[]>('/api/teams', []),
+
+  createTeam: (input: { display_name: string; affiliation?: string; links?: string[] }) =>
+    requireJson<{ id: string; display_name: string; invite_code: string }>('/api/teams', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    }),
 
   // ── announcements (dispatches under the hero)
   announcements: () =>

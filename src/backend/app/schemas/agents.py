@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,8 +14,8 @@ class AgentCreate(BaseModel):
 class AgentResponse(BaseModel):
     id: str
     name: str
-    owner_user_id: Optional[str] = None
-    owner_email: Optional[str] = None
+    owner_user_id: str | None = None
+    owner_email: str | None = None
     status: str
     created_at: datetime
     key_preview: str  # last 4 chars of the key — for confirmation, not auth
@@ -39,7 +38,7 @@ class AgentAdminCreate(BaseModel):
     """Admin creates an agent, optionally on behalf of a user."""
 
     name: str = Field(..., min_length=1, max_length=100)
-    owner_user_id: Optional[str] = None
+    owner_user_id: str | None = None
 
 
 class AgentSelfResponse(BaseModel):
@@ -47,7 +46,7 @@ class AgentSelfResponse(BaseModel):
 
     id: str
     name: str
-    owner_user_id: Optional[str] = None
+    owner_user_id: str | None = None
     status: str
     created_at: datetime
 
@@ -59,11 +58,11 @@ class AgentSubmissionCreate(BaseModel):
     agent's own auto-created project.
     """
 
-    project_id: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
-    result: Optional[str] = None
-    payload: Optional[dict] = None
+    project_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    result: str | None = None
+    payload: dict | None = None
 
 
 class AgentSubmissionStatus(BaseModel):
@@ -73,7 +72,7 @@ class AgentSubmissionStatus(BaseModel):
     participant_id: str
     status: str
     version: int
-    score: Optional[float] = None
+    score: float | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

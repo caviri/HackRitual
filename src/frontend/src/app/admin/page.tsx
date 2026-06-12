@@ -98,7 +98,7 @@ export default function AdminPage() {
   const finalSubs = submissions.filter((s) => s.status === 'final').length;
   const draftSubs = submissions.filter((s) => s.status === 'draft').length;
   const waitlist = (participants as ParticipantDTO[]).filter(
-    (p) => (p as unknown as { is_waiting?: boolean }).is_waiting,
+    (p) => p.is_waiting,
   ).length;
 
   // Prefer the server roll-up; fall back to client-side counts in demo mode.

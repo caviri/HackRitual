@@ -8,14 +8,14 @@ users, no per-key tallies. Cleared on restart, like the limiter itself.
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 _lock = threading.Lock()
 _by_day: dict[str, int] = {}
 
 
 def _today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(UTC).strftime("%Y-%m-%d")
 
 
 def record_trigger() -> None:

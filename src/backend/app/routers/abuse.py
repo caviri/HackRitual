@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -16,14 +15,13 @@ from app.models.user import User
 from app.services import abuse_metrics
 from app.services.audit import log_action
 
-
 admin_abuse_router = APIRouter(prefix="/api/admin/abuse", tags=["abuse"])
 
 
 class BlockIPRequest(BaseModel):
     ip_prefix: str = Field(..., description="Network to block, e.g. 192.168.1.0/24")
     duration_hours: int = Field(24, ge=1, le=24 * 30)
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @admin_abuse_router.post("/block-ip")
@@ -47,7 +45,7 @@ def block_ip(
     db.commit()
     return {
         "blocked": body.ip_prefix,
-        "expires_at": datetime.fromtimestamp(expiry, tz=timezone.utc).isoformat(),
+        "expires_at": datetime.fromtimestamp(expiry, tz=UTC).isoformat(),
     }
 
 

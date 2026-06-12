@@ -9,7 +9,6 @@ orchestration can be tested against a mock transport without touching GitHub.
 from __future__ import annotations
 
 import base64
-from typing import Optional
 
 import httpx
 
@@ -49,7 +48,7 @@ def _headers(token: str) -> dict:
 
 
 async def check_access(
-    repo: str, token: str, client: Optional[httpx.AsyncClient] = None
+    repo: str, token: str, client: httpx.AsyncClient | None = None
 ) -> bool:
     """True if the token can write to the repo."""
     own = client is None
@@ -73,7 +72,7 @@ async def push_export(
     token: str,
     branch: str = "gh-pages",
     commit_message: str = "Export HackRitual archive",
-    client: Optional[httpx.AsyncClient] = None,
+    client: httpx.AsyncClient | None = None,
 ) -> dict:
     """
     Commit ``files`` to ``repo``@``branch`` as a single tree.

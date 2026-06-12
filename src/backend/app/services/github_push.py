@@ -9,7 +9,7 @@ from the task-queue `push_github` handler so a large push never blocks a request
 from __future__ import annotations
 
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.config import settings
 from app.database import SessionLocal
@@ -63,5 +63,5 @@ async def run_push(payload: dict) -> dict:
         branch=payload.get("branch") or settings.github_export_branch,
         commit_message=payload.get("commit_message") or "Export HackRitual archive",
     )
-    result["pushed_at"] = datetime.now(timezone.utc).isoformat()
+    result["pushed_at"] = datetime.now(UTC).isoformat()
     return result

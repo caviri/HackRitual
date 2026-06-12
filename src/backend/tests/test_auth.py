@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 import time
 import uuid
+from datetime import UTC
 
 import pytest
 
@@ -284,13 +285,13 @@ async def test_login_updates_last_login_at(client):
 
 @pytest.mark.anyio
 async def test_login_creates_solo_participant_when_open(client):
+    from datetime import datetime
+
     from app.config import settings
     from app.database import SessionLocal
     from app.models.event import Event
     from app.models.participant import Participant
     from app.models.participant_member import ParticipantMember
-
-    from datetime import datetime, timezone
 
     with SessionLocal() as db:
         event = db.get(Event, settings.event_id)
@@ -299,8 +300,8 @@ async def test_login_creates_solo_participant_when_open(client):
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(event)
         previous_state = event.state or "DRAFT"

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -37,7 +37,7 @@ def log_action(
         target_type=target_type,
         target_id=target_id,
         metadata_json=json.dumps(metadata) if metadata else None,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     db.add(entry)
     logger.info(

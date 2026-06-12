@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -24,19 +23,18 @@ from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.user import User
 
-
 router = APIRouter(prefix="/api/log", tags=["log"])
 
 
 class LogEntry(BaseModel):
     id: str
     ts: datetime
-    actor: Optional[str] = None  # email or display_name; None if system
-    actor_id: Optional[str] = None
+    actor: str | None = None  # email or display_name; None if system
+    actor_id: str | None = None
     action: str
-    target_type: Optional[str] = None
-    target_id: Optional[str] = None
-    summary: Optional[str] = None
+    target_type: str | None = None
+    target_id: str | None = None
+    summary: str | None = None
 
 
 class LogPage(BaseModel):
@@ -61,10 +59,12 @@ _SAFE_META_KEYS = {
     "track",
     "phase",
     "method",
+    "handle",
+    "project",
 }
 
 
-def _summarise(meta_json: Optional[str]) -> Optional[str]:
+def _summarise(meta_json: str | None) -> str | None:
     if not meta_json:
         return None
     try:
@@ -85,14 +85,14 @@ def _summarise(meta_json: Optional[str]) -> Optional[str]:
 def list_log(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    action_prefix: Optional[str] = Query(
+    action_prefix: str | None = Query(
         None, description="e.g. event., user., participant."
     ),
-    actor: Optional[str] = Query(
+    actor: str | None = Query(
         None,
         description="Filter by actor — matches against user email or display_name",
     ),
-    target_type: Optional[str] = Query(None),
+    target_type: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> LogPage:
     """Public log feed. Only sanitised fields are returned."""

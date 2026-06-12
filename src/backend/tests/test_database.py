@@ -19,7 +19,6 @@ import uuid
 import pytest
 from sqlalchemy import inspect, text
 
-
 # ------------------------------------------------------------------ #
 # WAL mode / PRAGMAs
 # ------------------------------------------------------------------ #
@@ -112,6 +111,7 @@ def test_user_crud(_set_env):
 
 def test_event_crud(_set_env):
     from datetime import datetime
+
     from app.database import SessionLocal
     from app.models.event import Event
 
@@ -176,7 +176,7 @@ def test_audit_log_crud(_set_env):
 # ------------------------------------------------------------------ #
 
 def test_save_upload_creates_file(_set_env):
-    from app.utils.files import save_upload, get_upload_path
+    from app.utils.files import get_upload_path, save_upload
 
     data = b"hello hackritual"
     meta = save_upload(
@@ -198,7 +198,7 @@ def test_save_upload_creates_file(_set_env):
 
 
 def test_delete_upload(_set_env):
-    from app.utils.files import save_upload, delete_upload, get_upload_path
+    from app.utils.files import delete_upload, get_upload_path, save_upload
 
     data = b"to be deleted"
     meta = save_upload(
@@ -240,7 +240,7 @@ def test_save_upload_sha256_correctness(_set_env):
 
 def test_upload_stored_in_correct_directory(_set_env):
     """Files must land under <UPLOAD_DIR>/<event_id>/<participant_id>/<submission_id>/."""
-    from app.utils.files import save_upload, get_upload_path
+    from app.utils.files import get_upload_path, save_upload
 
     data = b"dir check"
     meta = save_upload(

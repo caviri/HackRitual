@@ -4,7 +4,7 @@ simulated with an httpx MockTransport — no network, no real repo.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -27,8 +27,8 @@ def _set_event(state: str = "FINAL") -> None:
                 id=settings.event_id,
                 title="Rite Bern",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(ev)
         ev.state = state

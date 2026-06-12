@@ -10,8 +10,7 @@ from app.database import get_db
 from app.middleware.auth import require_admin
 from app.models.phase import Phase
 from app.models.user import User
-from app.schemas.content import PhaseCreate, PhaseResponse
-
+from app.schemas.content import PhaseCreate, PhaseResponse, PhaseUpdate
 
 router = APIRouter(prefix="/api/phases", tags=["phases"])
 
@@ -41,6 +40,33 @@ def create_phase(
         modified_by_user_id=admin.id,
     )
     db.add(phase)
+    db.commit()
+    db.refresh(phase)
+    return phase
+
+
+@router.patch("/{phase_id}", response_model=PhaseResponse)
+def update_phase(
+    phase_id: str,
+    body: PhaseUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Phase:
+    phase = db.get(Phase, phase_id)
+    if not phase:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "phase not found")
+    changes = body.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "no fields to update")
+    starts = changes.get("starts_at", phase.starts_at)
+    ends = changes.get("ends_at", phase.ends_at)
+    if starts and ends:
+        s_naive = starts.replace(tzinfo=None) if getattr(starts, "tzinfo", None) else starts
+        e_naive = ends.replace(tzinfo=None) if getattr(ends, "tzinfo", None) else ends
+        if e_naive <= s_naive:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "ends_at must be after starts_at")
+    for field, value in changes.items():
+        setattr(phase, field, value)
     db.commit()
     db.refresh(phase)
     return phase

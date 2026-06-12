@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -11,14 +10,14 @@ from pydantic import BaseModel
 class TaskResponse(BaseModel):
     id: str
     type: str
-    ref_id: Optional[str] = None
+    ref_id: str | None = None
     status: str
     attempts: int
     max_attempts: int
-    last_error: Optional[str] = None
+    last_error: str | None = None
     available_at: datetime
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

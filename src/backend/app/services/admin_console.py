@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -26,7 +25,7 @@ from app.models.submission import Submission
 from app.scoring import DefaultScorer
 
 
-def _event(db: Session) -> Optional[Event]:
+def _event(db: Session) -> Event | None:
     return db.get(Event, settings.event_id) or db.query(Event).first()
 
 
@@ -161,11 +160,11 @@ def scoring_status(db: Session) -> dict:
 # --------------------------------------------------------------------------- #
 def audit_query(
     db: Session,
-    action: Optional[str] = None,
-    actor: Optional[str] = None,
+    action: str | None = None,
+    actor: str | None = None,
     page: int = 1,
     per_page: int = 50,
-    since_hours: Optional[int] = None,
+    since_hours: int | None = None,
 ) -> dict:
     """Filterable, paginated audit log across all actions."""
     q = db.query(AuditLog)

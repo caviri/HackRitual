@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 from sqlalchemy.orm import Session
 
 from app.models.repository import RepoCommit, Repository
-
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("HACKRITUAL_GITHUB_TOKEN")
 DEFAULT_TTL = timedelta(minutes=5)
@@ -66,7 +65,7 @@ def _parse_dt(s: str | None) -> datetime | None:
         return None
     try:
         # GitHub returns "2026-05-14T08:23:11Z" — naive UTC after stripping tz
-        return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc).replace(tzinfo=None)
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(UTC).replace(tzinfo=None)
     except Exception:
         return None
 

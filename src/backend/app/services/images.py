@@ -22,7 +22,6 @@ from typing import Literal
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageOps
 
-
 ImageEffect = Literal["none", "dither", "halftone"]
 
 

@@ -1,6 +1,5 @@
 import secrets
 import string
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -17,13 +16,13 @@ def generate_invite_code(length: int = 8) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def get_event_state(db: Session) -> Optional[str]:
+def get_event_state(db: Session) -> str | None:
     """Get the current event state."""
     event = db.query(Event).first()
     return event.state if event else None
 
 
-def can_register_participant(event_state: Optional[str]) -> bool:
+def can_register_participant(event_state: str | None) -> bool:
     """Check if participant registration is allowed."""
     return event_state in ("DRAFT", "OPEN")
 
@@ -76,8 +75,8 @@ def create_team(
     db: Session,
     user: User,
     display_name: str,
-    affiliation: Optional[str],
-    links: Optional[list[str]],
+    affiliation: str | None,
+    links: list[str] | None,
     event_id: str,
 ) -> tuple[Participant, str]:
     """Create a team and return (team, invite_code)."""
@@ -109,7 +108,7 @@ def create_team(
     return team, invite_code
 
 
-def get_team_by_invite_code(db: Session, invite_code: str) -> Optional[Participant]:
+def get_team_by_invite_code(db: Session, invite_code: str) -> Participant | None:
     """Get a team by its invite code (case-insensitive)."""
     team = (
         db.query(Participant)
@@ -161,7 +160,7 @@ def get_user_participants(db: Session, user_id: str) -> list[Participant]:
     return result
 
 
-def get_participant_by_id(db: Session, participant_id: str) -> Optional[Participant]:
+def get_participant_by_id(db: Session, participant_id: str) -> Participant | None:
     """Get a participant by ID."""
     return db.query(Participant).filter(Participant.id == participant_id).first()
 
@@ -251,7 +250,7 @@ def update_participant(
 def list_participants(
     db: Session,
     event_id: str,
-    participant_type: Optional[str] = None,
+    participant_type: str | None = None,
     status: str = "active",
     page: int = 1,
     per_page: int = 20,

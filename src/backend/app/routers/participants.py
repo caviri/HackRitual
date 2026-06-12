@@ -23,6 +23,7 @@ from app.schemas.participants import (
     TeamPublicResponse,
     TeamResponse,
 )
+from app.services.audit import log_action
 from app.services.participants import (
     can_register_participant,
     create_solo_participant,
@@ -74,6 +75,9 @@ def create_participant(
     
     try:
         participant = create_solo_participant(db, current_user, data, event_id)
+        log_action(db, "participant.registered", actor_id=current_user.id,
+                   target_type="participant", target_id=participant.id,
+                   metadata={"handle": participant.display_name})
         db.commit()
         db.refresh(participant)
         return participant
@@ -278,6 +282,9 @@ def create_team_endpoint(
     
     try:
         team, invite_code = create_team(db, current_user, data.display_name, data.affiliation, data.links, event_id)
+        log_action(db, "team.formed", actor_id=current_user.id,
+                   target_type="participant", target_id=team.id,
+                   metadata={"handle": team.display_name})
         db.commit()
         db.refresh(team)
         
@@ -318,6 +325,9 @@ def join_team_endpoint(
     
     try:
         join_team(db, current_user, team)
+        log_action(db, "team.joined", actor_id=current_user.id,
+                   target_type="participant", target_id=team.id,
+                   metadata={"handle": team.display_name})
         db.commit()
         db.refresh(team)
         
@@ -475,6 +485,10 @@ def regenerate_invite_endpoint(
         response = TeamResponse.model_validate(team)
         response.invite_code = new_code
         response.members = member_list
+        log_action(db, "team.invite_regenerated", actor_id=current_user.id,
+                   target_type="participant", target_id=team.id,
+                   metadata={"handle": team.display_name})
+        db.commit()
         return response
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

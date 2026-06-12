@@ -5,7 +5,7 @@ controlled upload, listing, owner/admin-gated streaming download, and delete.
 
 import hashlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -27,8 +27,8 @@ def _set_event(state: str = "OPEN") -> None:
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(ev)
         ev.state = state
@@ -239,3 +239,63 @@ class TestDelete:
 
         listing = await client.get(f"/api/submissions/{sub}/files")
         assert listing.json() == []
+
+
+@pytest.mark.anyio
+async def test_stranger_cannot_upload_image_to_others_submission(client):
+    """POST /api/uploads must reject users outside the submission's participant."""
+    import io
+    import uuid as _uuid
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.participant import Participant
+    from app.models.project import Project
+    from app.models.submission import Submission
+    from app.models.user import User
+    from app.services.auth import create_jwt
+
+    with SessionLocal() as db:
+        owner = Participant(
+            event_id=settings.event_id,
+            type="human",
+            display_name=f"up_owner_{_uuid.uuid4().hex[:6]}",
+            status="active",
+        )
+        db.add(owner)
+        db.flush()
+        project = Project(
+            event_id=settings.event_id,
+            proposed_by_participant_id=owner.id,
+            title=f"up-{_uuid.uuid4().hex[:6]}",
+            description="x",
+            status="approved",
+        )
+        db.add(project)
+        db.flush()
+        sub = Submission(
+            event_id=settings.event_id,
+            project_id=project.id,
+            participant_id=owner.id,
+            version=1,
+            title="v1",
+            description="",
+            status="draft",
+        )
+        db.add(sub)
+        stranger = User(email=f"upx_{_uuid.uuid4()}@test.local", role="user")
+        db.add(stranger)
+        db.commit()
+        db.refresh(sub)
+        db.refresh(stranger)
+        token = create_jwt(stranger)
+        sub_id, part_id = sub.id, owner.id
+
+    png = io.BytesIO(b"0" * 64)  # not a real png; the auth check fires first
+    resp = await client.post(
+        "/api/uploads",
+        files={"file": ("x.png", png, "image/png")},
+        data={"submission_id": sub_id, "participant_id": part_id},
+        cookies={"session": token},
+    )
+    assert resp.status_code == 403

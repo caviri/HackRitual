@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { PageHeader } from '../../../components/page-header';
+import { api, ApiError } from '../../../lib/api';
 
 /**
  * Team formation form.
@@ -15,6 +16,38 @@ export default function NewTeamPage() {
   const [name, setName] = useState('');
   const [blurb, setBlurb] = useState('');
   const [done, setDone] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const team = await api.createTeam({
+        display_name: name.trim(),
+        affiliation: blurb.trim() || undefined,
+      });
+      setInviteCode(team.invite_code);
+      setDone(true);
+    } catch (err) {
+      const transparentFailure =
+        !(err instanceof ApiError) || err.status === 404 || err.status === 0;
+      if (transparentFailure) {
+        // No backend — demo mode forms the team in spirit only.
+        setInviteCode(null);
+        setDone(true);
+      } else if (err instanceof ApiError && err.status === 401) {
+        setError('sign in first — a team needs a captain with a key.');
+      } else if (err instanceof ApiError) {
+        setError(err.body || `the circle would not close (${err.status})`);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (done) {
     return (
@@ -34,7 +67,7 @@ export default function NewTeamPage() {
             <div className="font-mono text-[0.82rem] space-y-1 pt-3 border-t border-rule">
               <p>
                 <span className="text-fg-dim">invite code   </span>
-                <span className="text-warm">7K-MOSS-{Math.random().toString(36).slice(2, 6).toUpperCase()}</span>
+                <span className="text-warm">{inviteCode ?? 'demo mode — none minted'}</span>
               </p>
               <p>
                 <span className="text-fg-dim">members       </span>
@@ -66,13 +99,7 @@ export default function NewTeamPage() {
       />
 
       <section className="mx-auto w-full max-w-2xl px-6 py-12">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setDone(true);
-          }}
-          className="space-y-6"
-        >
+        <form onSubmit={submit} className="space-y-6">
           <label className="block">
             <span className="font-mono text-[0.72rem] uppercase tracking-widest text-fg-dim">
               team name
@@ -105,8 +132,13 @@ export default function NewTeamPage() {
           </label>
 
           <div className="flex items-center gap-3 pt-4 border-t border-rule">
-            <button type="submit" className="btn">
-              summon the team →
+            {error && (
+              <p className="ascii-frame !border-danger px-3 py-2 font-mono text-[0.78rem] text-danger">
+                ✕ {error}
+              </p>
+            )}
+            <button type="submit" className="btn" disabled={busy}>
+              {busy ? 'summoning…' : 'summon the team →'}
             </button>
             <Link
               href="/teams/"

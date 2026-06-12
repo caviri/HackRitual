@@ -10,8 +10,6 @@ the right participant.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -20,7 +18,7 @@ from app.models.participant import Participant
 from app.models.participant_member import ParticipantMember
 
 
-def agent_participant(db: Session, agent: Agent) -> Optional[Participant]:
+def agent_participant(db: Session, agent: Agent) -> Participant | None:
     """Resolve the participant linked to this agent, if any."""
     return (
         db.query(Participant)

@@ -8,7 +8,7 @@ moderation with an audit trail.
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import status
@@ -30,8 +30,8 @@ def _set_event(state: str = "OPEN", config: dict | None = None) -> None:
                 id=settings.event_id,
                 title="Test Event",
                 type="hackathon",
-                start_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-                end_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
             )
             db.add(event)
         event.state = state
@@ -239,3 +239,42 @@ class TestAdminSubmissions:
         token, _ = _make_participant()
         resp = await client.get("/api/admin/submissions", headers=_headers(token))
         assert resp.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.anyio
+async def test_cannot_propose_for_someone_elses_participant(client):
+    """Project proposals are bound to the actor's own participant."""
+    import uuid as _uuid
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.participant import Participant
+    from app.models.user import User
+    from app.services.auth import create_jwt
+
+    with SessionLocal() as db:
+        victim = Participant(
+            event_id=settings.event_id,
+            type="human",
+            display_name=f"victim_{_uuid.uuid4().hex[:6]}",
+            status="active",
+        )
+        db.add(victim)
+        attacker = User(email=f"attacker_{_uuid.uuid4()}@test.local", role="user")
+        db.add(attacker)
+        db.commit()
+        db.refresh(victim)
+        db.refresh(attacker)
+        token = create_jwt(attacker)
+        victim_id = victim.id
+
+    resp = await client.post(
+        "/api/projects",
+        json={
+            "proposed_by_participant_id": victim_id,
+            "title": "not-mine",
+            "description": "x",
+        },
+        cookies={"session": token},
+    )
+    assert resp.status_code == 403

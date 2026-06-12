@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from fastapi import (
     APIRouter,
     Depends,
-    File as FastAPIFile,
     HTTPException,
     Query,
     UploadFile,
     status,
+)
+from fastapi import (
+    File as FastAPIFile,
 )
 from fastapi.responses import FileResponse
 from sqlalchemy import func
@@ -43,7 +43,6 @@ from app.services.event import get_event, load_config
 from app.services.scoring_service import score_submission
 from app.utils.files import delete_upload, get_upload_path, save_upload
 
-
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
@@ -52,8 +51,8 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(
-    track_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    track_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     db: Session = Depends(get_db),
 ) -> list[Project]:
     q = db.query(Project)
@@ -78,11 +77,16 @@ def create_project(
     db: Session = Depends(get_db),
     actor: Actor = Depends(get_current_actor),
 ) -> Project:
-    """Accepts both users and agents as proposers. The participant being
-    proposed-for must exist; finer-grained ownership checks come later."""
+    """Accepts both users and agents as proposers — but only on behalf of a
+    participant the actor actually controls (or as the keeper)."""
     participant = db.get(Participant, body.proposed_by_participant_id)
     if not participant:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "unknown participant")
+    if not actor.is_admin and participant.id not in submission_rules.participant_ids_for_actor(db, actor):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "you may only propose on behalf of your own participant",
+        )
     # created_by_user_id only meaningful for users; for agents, leave null and
     # rely on participant linkage to attribute provenance.
     actor_user_id = actor.user.id if actor.user else None
@@ -98,6 +102,10 @@ def create_project(
         modified_by_user_id=actor_user_id,
     )
     db.add(project)
+    db.flush()
+    log_action(db, "project.proposed", actor_id=actor_user_id,
+               target_type="project", target_id=project.id,
+               metadata={"title": project.title})
     db.commit()
     db.refresh(project)
     return project
@@ -115,6 +123,9 @@ def update_project_status(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "project not found")
     project.status = body.status
     project.modified_by_user_id = admin.id
+    log_action(db, f"project.{body.status}", actor_id=admin.id,
+               target_type="project", target_id=project.id,
+               metadata={"title": project.title})
     db.commit()
     db.refresh(project)
     return project
@@ -129,8 +140,8 @@ submissions_router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 
 @submissions_router.get("", response_model=list[SubmissionResponse])
 def list_submissions(
-    project_id: Optional[str] = Query(None),
-    participant_id: Optional[str] = Query(None),
+    project_id: str | None = Query(None),
+    participant_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ) -> list[Submission]:
     q = db.query(Submission)
@@ -220,6 +231,12 @@ def create_submission(
     db.add(sub)
     db.flush()
 
+    offered_project = db.get(Project, sub.project_id)
+    log_action(db, "submission.offered", actor_id=actor_user_id,
+               target_type="submission", target_id=sub.id,
+               metadata={"project": offered_project.title if offered_project else None,
+                         "version": sub.version})
+
     # Server-authoritative auto-scoring (Step 08), if enabled for the event.
     if load_config(get_event(db)).get("auto_score"):
         score_submission(db, sub.id)
@@ -246,10 +263,16 @@ def update_submission(
     submission_rules.assert_can_act_on(db, actor, sub)
     if sub.status == "final" and body.status != "withdrawn":
         raise HTTPException(status.HTTP_409_CONFLICT, "submission is final")
+    previous_status = sub.status
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(sub, field, value)
     if actor.user:
         sub.modified_by_user_id = actor.user.id
+    if sub.status == "final" and previous_status != "final":
+        log_action(db, "submission.finalised",
+                   actor_id=actor.user.id if actor.user else None,
+                   target_type="submission", target_id=sub.id,
+                   metadata={"title": sub.title, "version": sub.version})
     db.commit()
     db.refresh(sub)
     return sub
@@ -273,6 +296,10 @@ def withdraw_submission(
     sub.status = "withdrawn"
     if actor.user:
         sub.modified_by_user_id = actor.user.id
+    log_action(db, "submission.withdrawn",
+               actor_id=actor.user.id if actor.user else None,
+               target_type="submission", target_id=sub.id,
+               metadata={"title": sub.title, "version": sub.version})
     db.commit()
     db.refresh(sub)
     return sub
@@ -447,8 +474,8 @@ admin_submissions_router = APIRouter(
 
 @admin_submissions_router.get("", response_model=SubmissionListResponse)
 def admin_list_submissions(
-    participant_id: Optional[str] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    participant_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),

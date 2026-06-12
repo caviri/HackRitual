@@ -83,8 +83,9 @@ class TestTruncateIP:
 
 class TestBlocklist:
     def test_block_and_expire(self):
-        from app.middleware.rate_limit import IPBlocklist
         import time as _t
+
+        from app.middleware.rate_limit import IPBlocklist
 
         bl = IPBlocklist()
         bl.block("10.0.0.0/24", duration_seconds=3600)
