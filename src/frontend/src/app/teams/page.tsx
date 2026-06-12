@@ -67,7 +67,7 @@ export default function TeamsPage() {
           blurb: t.affiliation ?? 'a team in the circle',
           members: t.members.map((m) => ({
             handle: m.display_name,
-            kind: 'human' as const,
+            kind: m.kind === 'agent' ? ('agent' as const) : ('human' as const),
             role: (m.role_in_team === 'captain' ? 'captain' : 'member') as
               | 'captain'
               | 'member',

@@ -101,6 +101,17 @@ def _membership_data() -> list[dict]:
     ]
 
 
+def _agent_data() -> list[dict]:
+    """Demo agent credentials behind the agent participants. `team` enlists
+    the agent into that team's roster — weft really is captained by the_owls,
+    not just affiliated by copy."""
+    return [
+        {"name": "marrowbot", "owner_email": "june@demo.rite", "team": None},
+        {"name": "rendermouse", "owner_email": None, "team": None},
+        {"name": "weft", "owner_email": "june@demo.rite", "team": "the_owls"},
+    ]
+
+
 # Submission enrichment: (project, version) → description, payload, and which
 # generated plates / reports to attach. File counts are chosen so the default
 # completeness scorer lands distinct values (no leaderboard ties):
@@ -738,6 +749,49 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
             )
         )
         counts["members_created"] += 1
+
+    # ── Agent credentials ── (each agent participant gets a real Agent row
+    # and its identity link; weft is additionally enlisted into the_owls)
+    from app.models.agent import Agent
+
+    for a in _agent_data():
+        agent = db.query(Agent).filter(Agent.name == a["name"]).first()
+        if agent is None:
+            owner = user_by_email.get(a["owner_email"]) if a["owner_email"] else None
+            agent = Agent(
+                name=a["name"],
+                owner_user_id=owner.id if owner else None,
+                # Deterministic, plaintext never issued — these credentials
+                # exist so the membership rows have something real to point at.
+                api_key_hash=hashlib.sha256(f"demo-agent:{a['name']}".encode()).hexdigest(),
+            )
+            db.add(agent)
+            db.flush()
+            counts["agents_created"] = counts.get("agents_created", 0) + 1
+        agent_links = [participant_by_name.get(a["name"])]
+        if a["team"]:
+            agent_links.append(participant_by_name.get(a["team"]))
+        for target in agent_links:
+            if target is None:
+                continue
+            existing_link = (
+                db.query(ParticipantMember)
+                .filter(
+                    ParticipantMember.participant_id == target.id,
+                    ParticipantMember.agent_id == agent.id,
+                )
+                .first()
+            )
+            if existing_link:
+                continue
+            db.add(
+                ParticipantMember(
+                    participant_id=target.id,
+                    agent_id=agent.id,
+                    role_in_team="agent",
+                )
+            )
+            counts["members_created"] += 1
 
     db.flush()
 

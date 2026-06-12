@@ -72,16 +72,21 @@ def enforce_submission_limit(db: Session, participant_id: str) -> None:
 def participant_ids_for_actor(db: Session, actor: Actor) -> set[str]:
     """The participant ids the actor may act on behalf of.
 
-    Humans own the participants they are a member of; an agent owns the
-    participant its credential is linked to (Step 13).
+    Humans own the participants they are a member of; an agent owns every
+    participant its credential is linked to — its own `agent` participant
+    plus any team it has been enlisted into (Step 13).
     """
     if actor.user is not None:
         return {p.id for p in get_user_participants(db, actor.user.id)}
     if actor.agent is not None:
-        from app.services.agents import agent_participant
+        from app.models.participant_member import ParticipantMember
 
-        p = agent_participant(db, actor.agent)
-        return {p.id} if p else set()
+        rows = (
+            db.query(ParticipantMember.participant_id)
+            .filter(ParticipantMember.agent_id == actor.agent.id)
+            .all()
+        )
+        return {r[0] for r in rows}
     return set()
 
 

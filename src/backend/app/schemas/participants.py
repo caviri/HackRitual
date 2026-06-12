@@ -21,6 +21,7 @@ class ParticipantUpdate(BaseModel):
 
 class ParticipantMemberInfo(BaseModel):
     user_id: str | None = None
+    agent_id: str | None = None
     display_name: str | None = None
     email: str | None = None
     role_in_team: str
@@ -66,10 +67,12 @@ class RelatedTeam(BaseModel):
 
 
 class TeamMemberPublic(BaseModel):
-    """A team member as shown publicly — name and role, never the email."""
+    """A team member as shown publicly — name, role, and whether the seat is
+    held by a human or an autonomous agent. Never the email."""
 
     display_name: str
     role_in_team: str
+    kind: str = "human"  # human|agent
 
 
 class TeamPublicResponse(ParticipantPublicResponse):
@@ -97,6 +100,10 @@ class TeamResponse(ParticipantResponse):
 class TeamMemberAdd(BaseModel):
     user_id: str
     role_in_team: str = Field("member", pattern="^(captain|member)$")
+
+
+class TeamAgentAdd(BaseModel):
+    agent_id: str
 
 
 class ParticipantStatusUpdate(BaseModel):

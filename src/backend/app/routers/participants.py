@@ -1,10 +1,9 @@
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user, require_admin
+from app.models.agent import Agent
 from app.models.participant import Participant
 from app.models.participant_member import ParticipantMember
 from app.models.user import User
@@ -18,6 +17,7 @@ from app.schemas.participants import (
     ParticipantUpdate,
     RelatedProject,
     RelatedTeam,
+    TeamAgentAdd,
     TeamCreate,
     TeamMemberPublic,
     TeamPublicResponse,
@@ -25,6 +25,7 @@ from app.schemas.participants import (
 )
 from app.services.audit import log_action
 from app.services.participants import (
+    add_agent_to_team,
     can_register_participant,
     create_solo_participant,
     create_team,
@@ -55,6 +56,51 @@ def get_event_id(db: Session) -> str:
         return event.event_id
     # Fallback to settings
     return settings.event_id
+
+
+def _member_public(db: Session, m: ParticipantMember) -> TeamMemberPublic | None:
+    """A membership row's public face — a user's display name or an agent's
+    name, plus which kind holds the seat. Rows whose account is gone → None."""
+    if m.user_id:
+        user = db.get(User, m.user_id)
+        if user is None:
+            return None
+        return TeamMemberPublic(
+            display_name=user.display_name or "anonymous",
+            role_in_team=m.role_in_team,
+            kind="human",
+        )
+    if m.agent_id:
+        agent = db.get(Agent, m.agent_id)
+        if agent is None:
+            return None
+        return TeamMemberPublic(
+            display_name=agent.name,
+            role_in_team=m.role_in_team,
+            kind="agent",
+        )
+    return None
+
+
+def _member_info(db: Session, m: ParticipantMember) -> ParticipantMemberInfo | None:
+    """A membership row's authenticated view — email for humans, never for
+    agents (they have none)."""
+    if m.user_id:
+        user = db.get(User, m.user_id)
+        return ParticipantMemberInfo(
+            user_id=m.user_id,
+            display_name=user.email.split("@")[0] if user else "Unknown",
+            email=user.email if user else None,
+            role_in_team=m.role_in_team,
+        )
+    if m.agent_id:
+        agent = db.get(Agent, m.agent_id)
+        return ParticipantMemberInfo(
+            agent_id=m.agent_id,
+            display_name=agent.name if agent else "Unknown agent",
+            role_in_team=m.role_in_team,
+        )
+    return None
 
 
 @router.post("/participants", response_model=ParticipantResponse, status_code=status.HTTP_201_CREATED)
@@ -110,7 +156,7 @@ def list_participants_endpoint(
     )
 
 
-@router.get("/participants/me", response_model=Optional[ParticipantResponse])
+@router.get("/participants/me", response_model=ParticipantResponse | None)
 def get_own_participant(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -166,7 +212,6 @@ def get_participant(
     from app.models.participant import Participant
     from app.models.participant_member import ParticipantMember
     from app.models.project import Project
-    from app.models.user import User
 
     participant = get_participant_by_id(db, participant_id)
     if not participant:
@@ -184,28 +229,29 @@ def get_participant(
         )
     ]
 
-    user_ids = [
-        m.user_id
-        for m in get_team_members(db, participant.id)
-        if m.user_id is not None
-    ]
+    member_rows = get_team_members(db, participant.id)
+    user_ids = [m.user_id for m in member_rows if m.user_id is not None]
+    agent_ids = [m.agent_id for m in member_rows if m.agent_id is not None]
     if participant.type == "team":
-        for m in get_team_members(db, participant.id):
-            user = db.get(User, m.user_id) if m.user_id else None
-            if user is None:
-                continue
-            response.members.append(
-                TeamMemberPublic(
-                    display_name=user.display_name or "anonymous",
-                    role_in_team=m.role_in_team,
-                )
-            )
-    elif user_ids:
+        for m in member_rows:
+            info = _member_public(db, m)
+            if info is not None:
+                response.members.append(info)
+    elif user_ids or agent_ids:
+        from sqlalchemy import or_
+
+        # The teams this participant's people — or its agent credential —
+        # belong to.
+        membership_of_ours = []
+        if user_ids:
+            membership_of_ours.append(ParticipantMember.user_id.in_(user_ids))
+        if agent_ids:
+            membership_of_ours.append(ParticipantMember.agent_id.in_(agent_ids))
         rows = (
             db.query(Participant, ParticipantMember)
             .join(ParticipantMember, ParticipantMember.participant_id == Participant.id)
             .filter(
-                ParticipantMember.user_id.in_(user_ids),
+                or_(*membership_of_ours),
                 Participant.type == "team",
                 Participant.status == "active",
                 Participant.id != participant.id,
@@ -234,7 +280,6 @@ def list_teams(db: Session = Depends(get_db)) -> list[TeamPublicResponse]:
     """Public team roster: every active team with its members by display
     name and role. No emails, no invite codes."""
     from app.models.participant import Participant
-    from app.models.user import User
 
     event_id = get_event_id(db)
     teams = (
@@ -251,15 +296,9 @@ def list_teams(db: Session = Depends(get_db)) -> list[TeamPublicResponse]:
     for team in teams:
         response = TeamPublicResponse.model_validate(team)
         for m in get_team_members(db, team.id):
-            user = db.get(User, m.user_id) if m.user_id else None
-            if user is None:
-                continue
-            response.members.append(
-                TeamMemberPublic(
-                    display_name=user.display_name or "anonymous",
-                    role_in_team=m.role_in_team,
-                )
-            )
+            info = _member_public(db, m)
+            if info is not None:
+                response.members.append(info)
         out.append(response)
     return out
 
@@ -289,18 +328,12 @@ def create_team_endpoint(
         db.refresh(team)
         
         # Build response with members
-        members = get_team_members(db, team.id)
-        member_list = []
-        for m in members:
-            if m.user_id:
-                user = db.query(User).filter(User.id == m.user_id).first()
-                member_list.append(ParticipantMemberInfo(
-                    user_id=m.user_id,
-                    display_name=user.email.split('@')[0] if user else "Unknown",
-                    email=user.email if user else None,
-                    role_in_team=m.role_in_team,
-                ))
-        
+        member_list = [
+            info
+            for m in get_team_members(db, team.id)
+            if (info := _member_info(db, m)) is not None
+        ]
+
         response = TeamResponse.model_validate(team)
         response.invite_code = invite_code
         response.members = member_list
@@ -332,24 +365,66 @@ def join_team_endpoint(
         db.refresh(team)
         
         # Build response with members
-        members = get_team_members(db, team.id)
-        member_list = []
-        for m in members:
-            if m.user_id:
-                user = db.query(User).filter(User.id == m.user_id).first()
-                member_list.append(ParticipantMemberInfo(
-                    user_id=m.user_id,
-                    display_name=user.email.split('@')[0] if user else "Unknown",
-                    email=user.email if user else None,
-                    role_in_team=m.role_in_team,
-                ))
-        
+        member_list = [
+            info
+            for m in get_team_members(db, team.id)
+            if (info := _member_info(db, m)) is not None
+        ]
+
         response = TeamResponse.model_validate(team)
         response.invite_code = team.invite_code or ""
         response.members = member_list
         return response
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/teams/{team_id}/agents", status_code=status.HTTP_201_CREATED)
+def enlist_agent_endpoint(
+    team_id: str,
+    data: TeamAgentAdd,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Enlist an agent into a team. The caller must be a member of the team
+    AND own the agent — consent travels with the credential. Admins may
+    enlist any active agent anywhere. Removal goes through the ordinary
+    captain-only member removal."""
+    team = get_participant_by_id(db, team_id)
+    if not team or team.type != "team":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+
+    agent = db.get(Agent, data.agent_id)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    if agent.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A revoked agent cannot join a team",
+        )
+
+    if current_user.role != "admin":
+        if not is_team_member(db, current_user.id, team_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only team members can enlist an agent",
+            )
+        if agent.owner_user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only enlist an agent you own",
+            )
+
+    try:
+        member = add_agent_to_team(db, agent.id, team)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    log_action(db, "team.agent_enlisted", actor_id=current_user.id,
+               target_type="participant", target_id=team.id,
+               metadata={"handle": team.display_name, "agent": agent.name})
+    db.commit()
+    return {"status": "success", "member_id": member.id}
 
 
 @router.get("/teams/{team_id}/members")
@@ -369,18 +444,12 @@ def get_team_members_endpoint(
             detail="Only team members can view team members",
         )
     
-    members = get_team_members(db, team_id)
-    member_list = []
-    for m in members:
-        if m.user_id:
-            user = db.query(User).filter(User.id == m.user_id).first()
-            member_list.append(ParticipantMemberInfo(
-                user_id=m.user_id,
-                display_name=user.email.split('@')[0] if user else "Unknown",
-                email=user.email if user else None,
-                role_in_team=m.role_in_team,
-            ))
-    
+    member_list = [
+        info
+        for m in get_team_members(db, team_id)
+        if (info := _member_info(db, m)) is not None
+    ]
+
     return {"team_id": team_id, "members": member_list}
 
 
@@ -470,18 +539,12 @@ def regenerate_invite_endpoint(
         db.refresh(team)
         
         # Build response with members
-        members = get_team_members(db, team.id)
-        member_list = []
-        for m in members:
-            if m.user_id:
-                user = db.query(User).filter(User.id == m.user_id).first()
-                member_list.append(ParticipantMemberInfo(
-                    user_id=m.user_id,
-                    display_name=user.email.split('@')[0] if user else "Unknown",
-                    email=user.email if user else None,
-                    role_in_team=m.role_in_team,
-                ))
-        
+        member_list = [
+            info
+            for m in get_team_members(db, team.id)
+            if (info := _member_info(db, m)) is not None
+        ]
+
         response = TeamResponse.model_validate(team)
         response.invite_code = new_code
         response.members = member_list
