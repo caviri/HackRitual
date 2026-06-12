@@ -56,12 +56,15 @@ async def upload_image(
     # could previously attach images to anyone's submission.
     from app.middleware.actor import Actor
     from app.models.submission import Submission
-    from app.services.submissions import assert_can_act_on
+    from app.services.submissions import assert_can_act_on, require_open
 
     submission = db.get(Submission, submission_id)
     if submission is None or submission.participant_id != participant_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
     assert_can_act_on(db, Actor(user=user), submission)
+    # Same gate as the sibling attach endpoint: plates land while the forge
+    # is open, not after the seal.
+    require_open(db)
 
     raw = await file.read()
     if len(raw) == 0:

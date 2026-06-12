@@ -296,6 +296,16 @@ export interface HealthDTO {
   db_ok: boolean;
 }
 
+export interface SubmissionFileDTO {
+  id: string;
+  submission_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  created_at: string;
+}
+
 export interface UploadDTO {
   id: string;
   submission_id: string;
@@ -1001,6 +1011,15 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     }),
+
+  // Public metadata for a submission's attachments — names and sizes, never
+  // blobs or paths. Owners stream the bytes via the gated download URL.
+  submissionFiles: (submissionId: string) =>
+    fetchJson<SubmissionFileDTO[]>(`/api/submissions/${submissionId}/files`, []),
+
+  deleteSubmissionFile: async (submissionId: string, fileId: string) => {
+    await deleteVoid(`/api/submissions/${submissionId}/files/${fileId}`);
+  },
 
   uploadImage: async (
     file: File,
