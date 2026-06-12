@@ -692,6 +692,15 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
+  // Enlist an agent into a team — caller must be on the team and own the
+  // agent (the keeper may enlist anywhere).
+  enlistAgent: (teamId: string, agentId: string) =>
+    requireJson<{ status: string; member_id: string }>(`/api/teams/${teamId}/agents`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ agent_id: agentId }),
+    }),
+
   // ── announcements (dispatches under the hero)
   announcements: () =>
     fetchJson<AnnouncementDTO[]>('/api/announcements', []),
