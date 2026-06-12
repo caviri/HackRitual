@@ -2,9 +2,12 @@
 Demo-stage routing — five snapshots, one container.
 
 Active only when DEMO_STAGES=true. Picks the request's database from the
-`?stage=` query param (wins) or the `demo_stage` cookie; anything else falls
-through to the primary database. Pure ASGI middleware so the ContextVar is
-set and reset in the same task that runs the endpoint.
+`?stage=` query param (wins), the `X-Demo-Stage` header, or the `demo_stage`
+cookie; anything else falls through to the primary database. The header is
+the workhorse: cookies die inside the huggingface.co iframe (third-party,
+SameSite), so the frontend sends the stage explicitly on every API call.
+Pure ASGI middleware so the ContextVar is set and reset in the same task
+that runs the endpoint.
 """
 
 from __future__ import annotations
@@ -29,7 +32,14 @@ class DemoStageMiddleware:
         qs = parse_qs(scope.get("query_string", b"").decode("latin-1"))
         if qs.get("stage"):
             raw = qs["stage"][0]
-        else:
+        if raw is None:
+            header = next(
+                (v for k, v in scope.get("headers", []) if k == b"x-demo-stage"),
+                None,
+            )
+            if header:
+                raw = header.decode("latin-1")
+        if raw is None:
             cookie_header = next(
                 (v for k, v in scope.get("headers", []) if k == b"cookie"), b""
             ).decode("latin-1")
