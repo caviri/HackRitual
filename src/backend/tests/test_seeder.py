@@ -133,8 +133,24 @@ def test_team_membership_links(seeded):
                 .filter(ParticipantMember.participant_id == owls.id)
                 .all()
             )
-            emails = {db.get(User, m.user_id).email: m.role_in_team for m in members}
-            if emails.get("june@demo.rite") == "captain" and emails.get("ada@demo.rite") == "member":
+            emails = {
+                db.get(User, m.user_id).email: m.role_in_team
+                for m in members
+                if m.user_id is not None
+            }
+            agent_names = set()
+            for m in members:
+                if m.agent_id is not None:
+                    from app.models.agent import Agent
+
+                    agent = db.get(Agent, m.agent_id)
+                    if agent is not None:
+                        agent_names.add(agent.name)
+            if (
+                emails.get("june@demo.rite") == "captain"
+                and emails.get("ada@demo.rite") == "member"
+                and "weft" in agent_names
+            ):
                 return
         pytest.fail("no the_owls row carries the seeded demo membership")
 

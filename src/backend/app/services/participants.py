@@ -149,6 +149,34 @@ def join_team(
     return member
 
 
+def add_agent_to_team(
+    db: Session,
+    agent_id: str,
+    team: Participant,
+) -> ParticipantMember:
+    """Enlist an agent into a team. The membership row carries agent_id
+    instead of user_id; role is always 'agent'."""
+    existing = (
+        db.query(ParticipantMember)
+        .filter(
+            ParticipantMember.participant_id == team.id,
+            ParticipantMember.agent_id == agent_id,
+        )
+        .first()
+    )
+    if existing:
+        raise ValueError("Agent is already a member of this team")
+
+    member = ParticipantMember(
+        participant_id=team.id,
+        agent_id=agent_id,
+        role_in_team="agent",
+    )
+    db.add(member)
+    db.flush()
+    return member
+
+
 def get_user_participants(db: Session, user_id: str) -> list[Participant]:
     """Get all participants a user is a member of."""
     result = (

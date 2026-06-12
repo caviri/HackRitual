@@ -125,12 +125,23 @@ export default function ParticipantByQueryPage() {
                     {p.members.map((m) => (
                       <li
                         key={m.display_name}
+                        title={`${m.display_name} · ${m.role_in_team}`}
                         className="font-mono text-[0.72rem] uppercase tracking-wider border border-rule px-2 py-0.5 text-fg-muted"
                       >
-                        <span aria-hidden className="mr-1">
-                          {m.role_in_team === 'captain' ? '◆' : '·'}
+                        <span
+                          aria-hidden
+                          className={`mr-1 ${m.kind === 'agent' ? 'text-accent' : ''}`}
+                        >
+                          {m.role_in_team === 'captain'
+                            ? '◆'
+                            : m.kind === 'agent'
+                              ? '◇'
+                              : '·'}
                         </span>
                         {m.display_name}
+                        {m.kind === 'agent' && (
+                          <span className="text-accent ml-1">[agent]</span>
+                        )}
                       </li>
                     ))}
                   </ul>

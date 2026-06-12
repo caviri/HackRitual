@@ -103,6 +103,8 @@ _CHRONICLE: dict[str, list[tuple[int, str, str | None, dict | None]]] = {
         (15, "participant.registered", "participant", {"handle": "June K."}),
         (22, "team.formed", "participant", {"handle": "the_owls", "captain": "June K."}),
         (30, "agent.created", "agent", {"name": "marrowbot"}),
+        (33, "agent.created", "agent", {"name": "weft"}),
+        (38, "team.agent_enlisted", "participant", {"handle": "the_owls", "agent": "weft"}),
         (45, "project.proposed", "project", {"title": "mycelium-mesh", "track": "data-science"}),
         (52, "project.proposed", "project", {"title": "photosym-os", "track": "research-infra"}),
         (60, "project.approved", "project", {"title": "mycelium-mesh"}),
@@ -253,13 +255,20 @@ def _seed_chronicle(db, stage: str, start_at=None, end_at=None) -> None:
     db.flush()
 
 
+# Bump when the seeded NARRATIVE changes (new rows, new chronicle entries) —
+# the fingerprint otherwise only sees the schema, and existing snapshots
+# would keep telling the old story forever.
+_SEED_VERSION = 2
+
+
 def _schema_fingerprint() -> str:
-    """Hash of the current model schema (tables + columns). Snapshots built
-    under an older schema would 500 on new columns — the fingerprint makes
-    boot rebuild them automatically instead."""
+    """Hash of the current model schema (tables + columns) plus the seed
+    version. Snapshots built under an older schema would 500 on new columns;
+    snapshots built from older seed content would drift from the code — the
+    fingerprint makes boot rebuild them automatically either way."""
     import app.models  # noqa: F401 — register all models
 
-    parts = []
+    parts = [f"seed:{_SEED_VERSION}"]
     for table in sorted(Base.metadata.tables.values(), key=lambda t: t.name):
         for column in sorted(table.columns, key=lambda c: c.name):
             parts.append(f"{table.name}.{column.name}:{column.type}")

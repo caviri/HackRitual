@@ -19,12 +19,15 @@ from app.models.participant_member import ParticipantMember
 
 
 def agent_participant(db: Session, agent: Agent) -> Participant | None:
-    """Resolve the participant linked to this agent, if any."""
+    """Resolve the agent's own `agent`-type participant, if any. An agent may
+    also sit on teams — those are memberships, not its identity, so the type
+    filter keeps this deterministic."""
     return (
         db.query(Participant)
         .join(ParticipantMember, ParticipantMember.participant_id == Participant.id)
         .filter(
             Participant.event_id == settings.event_id,
+            Participant.type == "agent",
             ParticipantMember.agent_id == agent.id,
         )
         .first()

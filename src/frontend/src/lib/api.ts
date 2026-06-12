@@ -383,6 +383,7 @@ export interface ParticipantDetailDTO extends ParticipantDTO {
 export interface TeamMemberDTO {
   display_name: string;
   role_in_team: string;
+  kind: 'human' | 'agent';
 }
 
 export interface TeamDTO {
