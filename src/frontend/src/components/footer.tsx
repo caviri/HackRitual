@@ -35,6 +35,7 @@ const VERB_FOR: Record<string, { verb: string; tone?: LogEntry['tone'] }> = {
   'project.rejected': { verb: 'a proposal was declined', tone: 'warm' },
   'team.joined': { verb: 'joined a team' },
   'team.agent_enlisted': { verb: 'an agent was enlisted', tone: 'accent' },
+  'team.captain_transferred': { verb: 'the captaincy passed', tone: 'primary' },
   'team.left': { verb: 'left a team', tone: 'warm' },
   'submission.offered': { verb: 'offered work' },
   'submission.finalised': { verb: 'sealed an offering', tone: 'primary' },

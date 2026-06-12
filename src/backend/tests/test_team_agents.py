@@ -9,6 +9,30 @@ import uuid
 import pytest
 
 
+def _set_event_open() -> None:
+    """Membership mutations are gated to DRAFT/OPEN — pin the shared event
+    so these tests don't depend on what state a previous test left behind."""
+    from datetime import UTC, datetime
+
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.event import Event
+
+    with SessionLocal() as db:
+        ev = db.get(Event, settings.event_id)
+        if ev is None:
+            ev = Event(
+                id=settings.event_id,
+                title="Test Event",
+                type="hackathon",
+                start_at=datetime(2026, 1, 1, tzinfo=UTC),
+                end_at=datetime(2026, 1, 2, tzinfo=UTC),
+            )
+            db.add(ev)
+        ev.state = "OPEN"
+        db.commit()
+
+
 def _make_user(role: str = "user"):
     from app.database import SessionLocal
     from app.models.user import User
@@ -70,6 +94,7 @@ def _make_agent(owner_user_id: str | None, status: str = "active"):
 
 @pytest.mark.anyio
 async def test_captain_enlists_own_agent_and_roster_shows_it(client):
+    _set_event_open()
     owner_id, owner_token = _make_user()
     team_id = _make_team(owner_id)
     agent_id, agent_name, _ = _make_agent(owner_id)
@@ -94,6 +119,7 @@ async def test_captain_enlists_own_agent_and_roster_shows_it(client):
 
 @pytest.mark.anyio
 async def test_stranger_cannot_enlist(client):
+    _set_event_open()
     owner_id, _ = _make_user()
     team_id = _make_team(owner_id)
     stranger_id, stranger_token = _make_user()
@@ -109,6 +135,7 @@ async def test_stranger_cannot_enlist(client):
 
 @pytest.mark.anyio
 async def test_member_cannot_enlist_an_agent_they_do_not_own(client):
+    _set_event_open()
     captain_id, captain_token = _make_user()
     team_id = _make_team(captain_id)
     other_id, _ = _make_user()
@@ -124,6 +151,7 @@ async def test_member_cannot_enlist_an_agent_they_do_not_own(client):
 
 @pytest.mark.anyio
 async def test_admin_can_enlist_any_agent(client):
+    _set_event_open()
     owner_id, _ = _make_user()
     team_id = _make_team(owner_id)
     agent_id, _, _ = _make_agent(owner_id)
@@ -139,6 +167,7 @@ async def test_admin_can_enlist_any_agent(client):
 
 @pytest.mark.anyio
 async def test_duplicate_enlist_rejected(client):
+    _set_event_open()
     owner_id, owner_token = _make_user()
     team_id = _make_team(owner_id)
     agent_id, _, _ = _make_agent(owner_id)
@@ -159,6 +188,7 @@ async def test_duplicate_enlist_rejected(client):
 
 @pytest.mark.anyio
 async def test_revoked_agent_cannot_join(client):
+    _set_event_open()
     owner_id, owner_token = _make_user()
     team_id = _make_team(owner_id)
     agent_id, _, _ = _make_agent(owner_id, status="revoked")
@@ -174,6 +204,7 @@ async def test_revoked_agent_cannot_join(client):
 @pytest.mark.anyio
 async def test_enlisted_agent_may_act_for_the_team(client):
     """The credential's ownership map covers the team after enlistment."""
+    _set_event_open()
     from app.database import SessionLocal
     from app.middleware.actor import Actor
     from app.models.agent import Agent
@@ -205,6 +236,7 @@ async def test_enlisted_agent_may_act_for_the_team(client):
 async def test_team_membership_does_not_shadow_the_agents_own_identity(client):
     """agent_participant must keep resolving the solo `agent` participant,
     not the team the agent was enlisted into."""
+    _set_event_open()
     from app.database import SessionLocal
     from app.models.agent import Agent
     from app.services.agents import agent_participant, link_agent_participant
@@ -237,6 +269,7 @@ async def test_team_membership_does_not_shadow_the_agents_own_identity(client):
 @pytest.mark.anyio
 async def test_agent_detail_lists_its_team(client):
     """The agent participant's public detail names the team it serves on."""
+    _set_event_open()
     from app.database import SessionLocal
     from app.models.agent import Agent
     from app.services.agents import link_agent_participant
@@ -265,6 +298,7 @@ async def test_agent_detail_lists_its_team(client):
 async def test_deleting_an_agent_clears_its_seats(client):
     """Hard-deleting an agent must not leave junk membership rows or a ghost
     participant on the public roster."""
+    _set_event_open()
     from app.database import SessionLocal
     from app.models.agent import Agent
     from app.models.participant import Participant
@@ -320,6 +354,7 @@ async def test_deleting_an_agent_clears_its_seats(client):
 async def test_agent_sees_its_team_submission_status(client):
     """A submission made on the team's behalf is visible through the
     agent-key status endpoint."""
+    _set_event_open()
     from app.config import settings
     from app.database import SessionLocal
     from app.models.project import Project
@@ -376,6 +411,7 @@ async def test_agent_sees_its_team_submission_status(client):
 async def test_owner_can_remove_their_own_agents_seat(client):
     """A non-captain member who owns the agent may pull it from the roster;
     an unrelated member may not."""
+    _set_event_open()
     from app.database import SessionLocal
     from app.models.participant_member import ParticipantMember
 
@@ -426,6 +462,7 @@ async def test_owner_can_remove_their_own_agents_seat(client):
 
 @pytest.mark.anyio
 async def test_captain_can_remove_agent_member(client):
+    _set_event_open()
     owner_id, owner_token = _make_user()
     team_id = _make_team(owner_id)
     agent_id, _, _ = _make_agent(owner_id)

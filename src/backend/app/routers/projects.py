@@ -87,6 +87,19 @@ def create_project(
             status.HTTP_403_FORBIDDEN,
             "you may only propose on behalf of your own participant",
         )
+    if participant.status != "active":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "participant is not active"
+        )
+    # Proposals are accepted while registration is — DRAFT and OPEN. Once the
+    # gates close the slate is fixed (admins may still curate).
+    if not actor.is_admin:
+        event_state = get_event(db).state
+        if event_state not in ("DRAFT", "OPEN"):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"proposals are closed in {event_state} state",
+            )
     # created_by_user_id only meaningful for users; for agents, leave null and
     # rely on participant linkage to attribute provenance.
     actor_user_id = actor.user.id if actor.user else None
