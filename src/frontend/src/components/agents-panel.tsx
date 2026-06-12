@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, ApiError, type AgentDTO, type AgentCreatedDTO } from '../lib/api';
+import { api, ApiError, type AgentDTO, type AgentCreatedDTO, type TeamDTO } from '../lib/api';
 
 interface Props {
   /** "admin" view shows owner column. "self" view doesn't. */
@@ -22,6 +22,10 @@ export function AgentsPanel({ scope }: Props) {
   // The plaintext key is shown ONCE after create/rotate. We surface it in a
   // dismissible callout so the user can copy it before it's lost forever.
   const [revealed, setRevealed] = useState<AgentCreatedDTO | null>(null);
+  // Enlist flow: pick an agent, then pick the team it should serve on.
+  const [enlisting, setEnlisting] = useState<AgentDTO | null>(null);
+  const [teams, setTeams] = useState<TeamDTO[] | null>(null);
+  const [enlisted, setEnlisted] = useState<string | null>(null);
 
   useEffect(() => {
     void api.agents().then((a) => {
@@ -68,6 +72,28 @@ export function AgentsPanel({ scope }: Props) {
       setAgents((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
     } catch (err) {
       setError(err instanceof ApiError ? err.body || 'revoke failed' : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openEnlist(a: AgentDTO) {
+    setError(null);
+    setEnlisted(null);
+    setEnlisting(a);
+    if (teams === null) setTeams(await api.teams());
+  }
+
+  async function enlist(team: TeamDTO) {
+    if (!enlisting) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.enlistAgent(team.id, enlisting.id);
+      setEnlisted(`${enlisting.name} now serves ${team.display_name}`);
+      setEnlisting(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.body || `enlist failed (${err.status})` : String(err));
     } finally {
       setBusy(false);
     }
@@ -125,6 +151,54 @@ export function AgentsPanel({ scope }: Props) {
         </p>
       )}
 
+      {enlisted && (
+        <p className="ascii-frame !border-primary px-3 py-2 font-mono text-[0.78rem] text-primary">
+          ◆ {enlisted}
+        </p>
+      )}
+
+      {/* team picker for the enlist flow */}
+      {enlisting && (
+        <div className="ascii-frame p-5 animate-rise">
+          <header className="flex items-baseline justify-between gap-3 mb-3">
+            <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim">
+              enlist <span className="text-accent">{enlisting.name}</span> into a circle
+            </p>
+            <button
+              type="button"
+              onClick={() => setEnlisting(null)}
+              className="font-mono text-[0.72rem] text-fg-muted hover:text-fg"
+            >
+              dismiss ×
+            </button>
+          </header>
+          {teams === null ? (
+            <p className="font-mono text-fg-dim text-[0.78rem]">summoning teams…</p>
+          ) : teams.length === 0 ? (
+            <p className="ritual text-fg-muted">No teams have formed yet.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {teams.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void enlist(t)}
+                    className="btn btn-ghost !py-1.5 !px-3 !text-[0.72rem]"
+                  >
+                    ◇ {t.display_name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="font-mono text-[0.7rem] text-fg-dim mt-3">
+            ▒ you must be a member of the team and own the agent — the keeper may
+            enlist anywhere
+          </p>
+        </div>
+      )}
+
       {/* list */}
       <div>
         <p className="font-mono text-[0.7rem] uppercase tracking-widest text-fg-dim mb-3">
@@ -168,6 +242,16 @@ export function AgentsPanel({ scope }: Props) {
                   </ul>
                 </div>
                 <div className="flex flex-wrap gap-2 justify-end">
+                  {a.status === 'active' && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void openEnlist(a)}
+                      className="btn btn-ghost !py-1.5 !px-3 !text-[0.7rem] !border-accent !text-accent"
+                    >
+                      ◇ enlist
+                    </button>
+                  )}
                   <button
                     type="button"
                     disabled={busy}

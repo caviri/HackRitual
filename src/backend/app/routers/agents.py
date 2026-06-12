@@ -224,6 +224,20 @@ def delete_agent(
     if not agent:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "agent not found")
     _ensure_owner_or_admin(agent, actor)
+
+    # Clear the agent's seats: drop its membership rows (the FK would only
+    # NULL them, leaving junk) and retire its participant so it leaves the
+    # public roster. The participant row itself stays — projects and
+    # submissions keep their provenance.
+    from app.models.participant_member import ParticipantMember
+
+    participant = agent_participant(db, agent)
+    db.query(ParticipantMember).filter(
+        ParticipantMember.agent_id == agent.id
+    ).delete(synchronize_session=False)
+    if participant is not None:
+        participant.status = "disabled"
+
     db.delete(agent)
     db.commit()
 
@@ -340,11 +354,12 @@ def agent_submission_status(
     db: Session = Depends(get_db),
     actor: Actor = Depends(get_current_actor),
 ) -> AgentSubmissionStatus:
-    """An agent checks one of its own submissions, with score if available."""
-    agent = _require_agent(actor)
-    participant = agent_participant(db, agent)
+    """An agent checks one of its own submissions — including those it made
+    on behalf of a team it is enlisted in — with score if available."""
+    _require_agent(actor)
     sub = db.get(Submission, submission_id)
-    if sub is None or participant is None or sub.participant_id != participant.id:
+    owned = submission_rules.participant_ids_for_actor(db, actor)
+    if sub is None or sub.participant_id not in owned:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "submission not found")
     score = active_score(db, sub.id)
     return AgentSubmissionStatus(

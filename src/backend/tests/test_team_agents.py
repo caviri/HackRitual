@@ -262,6 +262,169 @@ async def test_agent_detail_lists_its_team(client):
 
 
 @pytest.mark.anyio
+async def test_deleting_an_agent_clears_its_seats(client):
+    """Hard-deleting an agent must not leave junk membership rows or a ghost
+    participant on the public roster."""
+    from app.database import SessionLocal
+    from app.models.agent import Agent
+    from app.models.participant import Participant
+    from app.models.participant_member import ParticipantMember
+    from app.services.agents import link_agent_participant
+
+    owner_id, owner_token = _make_user()
+    team_id = _make_team(owner_id)
+    agent_id, _, _ = _make_agent(owner_id)
+
+    with SessionLocal() as db:
+        agent = db.get(Agent, agent_id)
+        solo_id = link_agent_participant(db, agent).id
+        db.commit()
+
+    await client.post(
+        f"/api/teams/{team_id}/agents",
+        json={"agent_id": agent_id},
+        cookies={"session": owner_token},
+    )
+
+    deleted = await client.delete(
+        f"/api/agents/{agent_id}", cookies={"session": owner_token}
+    )
+    assert deleted.status_code == 204
+
+    with SessionLocal() as db:
+        leftover = (
+            db.query(ParticipantMember)
+            .filter(ParticipantMember.agent_id == agent_id)
+            .count()
+        )
+        assert leftover == 0
+        # No NULL-NULL junk rows on the team either.
+        junk = (
+            db.query(ParticipantMember)
+            .filter(
+                ParticipantMember.participant_id == team_id,
+                ParticipantMember.user_id.is_(None),
+                ParticipantMember.agent_id.is_(None),
+            )
+            .count()
+        )
+        assert junk == 0
+        assert db.get(Participant, solo_id).status == "disabled"
+
+    teams = (await client.get("/api/teams")).json()
+    team = next(t for t in teams if t["id"] == team_id)
+    assert [m for m in team["members"] if m["kind"] == "agent"] == []
+
+
+@pytest.mark.anyio
+async def test_agent_sees_its_team_submission_status(client):
+    """A submission made on the team's behalf is visible through the
+    agent-key status endpoint."""
+    from app.config import settings
+    from app.database import SessionLocal
+    from app.models.project import Project
+    from app.models.submission import Submission
+
+    owner_id, owner_token = _make_user()
+    team_id = _make_team(owner_id)
+    agent_id, _, key = _make_agent(owner_id)
+
+    resp = await client.post(
+        f"/api/teams/{team_id}/agents",
+        json={"agent_id": agent_id},
+        cookies={"session": owner_token},
+    )
+    assert resp.status_code == 201
+
+    with SessionLocal() as db:
+        project = Project(
+            event_id=settings.event_id,
+            proposed_by_participant_id=team_id,
+            title=f"loom-{uuid.uuid4().hex[:6]}",
+            description="x",
+            status="approved",
+        )
+        db.add(project)
+        db.flush()
+        sub = Submission(
+            event_id=settings.event_id,
+            project_id=project.id,
+            participant_id=team_id,
+            version=1,
+            title="v1",
+            status="draft",
+        )
+        db.add(sub)
+        db.commit()
+        sub_id = sub.id
+
+    seen = await client.get(
+        f"/api/agent/submissions/{sub_id}", headers={"X-API-Key": key}
+    )
+    assert seen.status_code == 200
+    assert seen.json()["participant_id"] == team_id
+
+    # A different agent's key still gets a 404, not a leak.
+    _, _, other_key = _make_agent(owner_id)
+    hidden = await client.get(
+        f"/api/agent/submissions/{sub_id}", headers={"X-API-Key": other_key}
+    )
+    assert hidden.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_owner_can_remove_their_own_agents_seat(client):
+    """A non-captain member who owns the agent may pull it from the roster;
+    an unrelated member may not."""
+    from app.database import SessionLocal
+    from app.models.participant_member import ParticipantMember
+
+    captain_id, _ = _make_user()
+    team_id = _make_team(captain_id)
+    member_id_user, member_token = _make_user()
+    other_member_id, other_member_token = _make_user()
+    with SessionLocal() as db:
+        db.add(
+            ParticipantMember(
+                participant_id=team_id,
+                user_id=member_id_user,
+                role_in_team="member",
+            )
+        )
+        db.add(
+            ParticipantMember(
+                participant_id=team_id,
+                user_id=other_member_id,
+                role_in_team="member",
+            )
+        )
+        db.commit()
+
+    agent_id, _, _ = _make_agent(member_id_user)
+    enlisted = await client.post(
+        f"/api/teams/{team_id}/agents",
+        json={"agent_id": agent_id},
+        cookies={"session": member_token},
+    )
+    assert enlisted.status_code == 201
+    seat_id = enlisted.json()["member_id"]
+
+    # A fellow member who does not own the agent is refused.
+    forbidden = await client.delete(
+        f"/api/teams/{team_id}/members/{seat_id}",
+        cookies={"session": other_member_token},
+    )
+    assert forbidden.status_code == 403
+
+    # The owner may pull their own agent without being captain.
+    removed = await client.delete(
+        f"/api/teams/{team_id}/members/{seat_id}",
+        cookies={"session": member_token},
+    )
+    assert removed.status_code == 200
+
+
+@pytest.mark.anyio
 async def test_captain_can_remove_agent_member(client):
     owner_id, owner_token = _make_user()
     team_id = _make_team(owner_id)

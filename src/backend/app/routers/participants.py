@@ -460,20 +460,36 @@ def remove_member_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Remove a team member (captain only)."""
+    """Remove a team member. Captains and admins may remove anyone; the
+    owner of an enlisted agent may pull their own agent's seat."""
     team = get_participant_by_id(db, team_id)
     if not team or team.type != "team":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-    
-    if not is_team_captain(db, current_user.id, team_id):
+
+    member = (
+        db.query(ParticipantMember)
+        .filter(
+            ParticipantMember.id == member_id,
+            ParticipantMember.participant_id == team_id,
+        )
+        .first()
+    )
+    if member is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+
+    allowed = current_user.role == "admin" or is_team_captain(db, current_user.id, team_id)
+    if not allowed and member.agent_id is not None:
+        agent = db.get(Agent, member.agent_id)
+        allowed = agent is not None and agent.owner_user_id == current_user.id
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the team captain can remove members",
+            detail="Only the team captain (or the agent's owner) can remove members",
         )
-    
+
     remove_team_member(db, team_id, member_id)
     db.commit()
-    
+
     return {"status": "success", "message": "Member removed"}
 
 
