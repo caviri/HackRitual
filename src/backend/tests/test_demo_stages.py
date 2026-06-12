@@ -335,3 +335,31 @@ def test_stage_announcements_and_applications_progress(demo_mode):
     with get_sessionmaker("ARCHIVED")() as db:
         titles = {a.title for a in db.query(Announcement).all()}
         assert "The record is sealed" in titles
+
+
+def test_log_feed_tops_with_stage_story_not_build_time(demo_mode):
+    from datetime import datetime, timedelta
+
+    from app.database import get_sessionmaker
+    from app.models.audit_log import AuditLog
+
+    now = datetime.utcnow()
+    with get_sessionmaker("ARCHIVED")() as db:
+        newest = (
+            db.query(AuditLog).order_by(AuditLog.created_at.desc()).first()
+        )
+        # The record sealed weeks ago — nothing in its log may be "just now".
+        assert newest.created_at < now - timedelta(days=20)
+        assert newest.action in {"record.closed", "export.sealed"}
+
+    with get_sessionmaker("OPEN")() as db:
+        from app.models.event import Event
+
+        ev = db.query(Event).one()
+        approvals = (
+            db.query(AuditLog).filter(AuditLog.action == "application.approved").all()
+        )
+        assert approvals
+        for a in approvals:
+            # Granted inside the event window, not at build wall-clock time.
+            assert ev.start_at <= a.created_at <= ev.end_at

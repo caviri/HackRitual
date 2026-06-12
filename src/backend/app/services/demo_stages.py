@@ -143,6 +143,34 @@ _STAGE_HISTORY = {
 }
 
 
+def _anchor_bookkeeping(db, start_at) -> None:
+    """Re-stamp the audit rows the seeding itself produced so they sit inside
+    the stage's own timeline instead of at build wall-clock time (which would
+    crown every stage's log with identical just-now entries — wrong for a
+    snapshot whose window closed a month ago)."""
+    from datetime import timedelta
+
+    from app.models.application import Application
+    from app.models.audit_log import AuditLog
+
+    rows = db.query(AuditLog).order_by(AuditLog.created_at).all()
+    setup_i = grant_i = 0
+    for row in rows:
+        if row.action == "application.approved":
+            # The keeper reads petitions once the gates open.
+            row.created_at = start_at + timedelta(minutes=8 + grant_i * 3)
+            grant_i += 1
+        else:
+            # Inscription-era bookkeeping (keeper seeded, roles recast).
+            row.created_at = start_at - timedelta(days=2, minutes=-7 * setup_i)
+            setup_i += 1
+
+    for application in db.query(Application).filter(Application.decided_at.isnot(None)).all():
+        offset = 8 if application.status == "approved" else 4
+        application.decided_at = start_at + timedelta(minutes=offset)
+    db.flush()
+
+
 def _seed_chronicle(db, stage: str, anchor=None) -> None:
     """Write the stage's narrative into the audit log (deterministic offsets
     from the stage's event start). Flushes; caller commits."""
@@ -209,6 +237,7 @@ def build_stage(stage: str, force: bool = False) -> bool:
         db.flush()
         seed_admin_users(db)
         counts = seed_fixtures(db, PROFILES[stage])
+        _anchor_bookkeeping(db, start_at)
         _seed_chronicle(db, stage, anchor=start_at)
         db.commit()
 
