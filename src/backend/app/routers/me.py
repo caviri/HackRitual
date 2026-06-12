@@ -88,9 +88,9 @@ def _process_and_save(
         original_path = root / f"original.{new_original_suffix or 'png'}"
         original_path.write_bytes(new_original_bytes)
         source_bytes = new_original_bytes
-        user.portrait_original_path = str(
-            original_path.relative_to(Path(settings.upload_dir))
-        )
+        user.portrait_original_path = original_path.relative_to(
+            Path(settings.upload_dir)
+        ).as_posix()
     else:
         if not user.portrait_original_path:
             raise HTTPException(
@@ -125,7 +125,7 @@ def _process_and_save(
 
     processed_path.write_bytes(processed)
 
-    user.portrait_path = str(processed_path.relative_to(Path(settings.upload_dir)))
+    user.portrait_path = processed_path.relative_to(Path(settings.upload_dir)).as_posix()
     user.portrait_effect = effect
     user.portrait_contrast = float(contrast)
     user.portrait_brightness = int(brightness)

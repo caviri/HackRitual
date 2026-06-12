@@ -317,9 +317,9 @@ def _participant_data() -> list[dict]:
         {"display_name": "rendermouse", "type": "agent", "affiliation": "solo agent", "is_waiting": True},
         {"display_name": "weft", "type": "agent", "affiliation": "captained by the_owls", "is_waiting": False},
         # Teams
-        {"display_name": "the_owls", "type": "team", "affiliation": "Lisbon collective · 4 members", "is_waiting": False},
-        {"display_name": "photosym-duo", "type": "team", "affiliation": "circadian schedulers · 2 members", "is_waiting": False},
-        {"display_name": "meadow", "type": "team", "affiliation": "solo team · 1 member", "is_waiting": False},
+        {"display_name": "the_owls", "type": "team", "affiliation": "Lisbon collective", "is_waiting": False},
+        {"display_name": "photosym-duo", "type": "team", "affiliation": "circadian schedulers", "is_waiting": False},
+        {"display_name": "meadow", "type": "team", "affiliation": "solo team", "is_waiting": False},
     ]
 
 
@@ -761,8 +761,8 @@ def seed_fixtures(db: Session, profile: SeedProfile = FULL_PROFILE) -> dict[str,
         )
         processed_path = root / f"processed-{hashlib.sha256(processed).hexdigest()[:12]}.png"
         processed_path.write_bytes(processed)
-        user.portrait_original_path = str(original_path.relative_to(upload_root))
-        user.portrait_path = str(processed_path.relative_to(upload_root))
+        user.portrait_original_path = original_path.relative_to(upload_root).as_posix()
+        user.portrait_path = processed_path.relative_to(upload_root).as_posix()
         user.portrait_effect = "dither"
         user.portrait_contrast = 1.8
         user.portrait_brightness = 0

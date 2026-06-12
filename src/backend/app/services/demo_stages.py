@@ -14,6 +14,7 @@ migration picks up the new schema automatically.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import time
@@ -110,28 +111,33 @@ _CHRONICLE: dict[str, list[tuple[int, str, str | None, dict | None]]] = {
         (180, "submission.withdrawn", "submission", {"project": "the_meadow_ide", "version": 1}),
         (220, "submission.offered", "submission", {"project": "spore-print", "version": 1}),
     ],
+    # FROZEN onward anchors to the window END (the seal happens when the
+    # gates close, wherever that end sits for the stage).
     "FROZEN": [
-        (1440, "event.transition", "event", {"from": "OPEN", "to": "FROZEN", "by": "the keeper"}),
-        (1442, "submission.finalised", "submission", {"project": "mycelium-mesh", "version": 3}),
-        (1444, "submission.finalised", "submission", {"project": "rhizome-rpc", "version": 1}),
-        (1446, "submission.finalised", "submission", {"project": "photosym-os", "version": 2}),
-        (1448, "submission.finalised", "submission", {"project": "lichen-loom", "version": 2}),
-        (1460, "score.rendered", "score", {"project": "mycelium-mesh", "value": 90.0, "scorer": "default-1.0"}),
-        (1461, "score.rendered", "score", {"project": "rhizome-rpc", "value": 80.0, "scorer": "default-1.0"}),
-        (1462, "score.rendered", "score", {"project": "photosym-os", "value": 60.0, "scorer": "default-1.0"}),
-        (1463, "score.rendered", "score", {"project": "lichen-loom", "value": 50.0, "scorer": "default-1.0"}),
+        (0, "event.transition", "event", {"from": "OPEN", "to": "FROZEN", "by": "the keeper"}),
+        (2, "submission.finalised", "submission", {"project": "mycelium-mesh", "version": 3}),
+        (4, "submission.finalised", "submission", {"project": "rhizome-rpc", "version": 1}),
+        (6, "submission.finalised", "submission", {"project": "photosym-os", "version": 2}),
+        (8, "submission.finalised", "submission", {"project": "lichen-loom", "version": 2}),
+        (20, "score.rendered", "score", {"project": "mycelium-mesh", "score": 90.0, "scorer": "default-1.0"}),
+        (21, "score.rendered", "score", {"project": "rhizome-rpc", "score": 80.0, "scorer": "default-1.0"}),
+        (22, "score.rendered", "score", {"project": "photosym-os", "score": 60.0, "scorer": "default-1.0"}),
+        (23, "score.rendered", "score", {"project": "lichen-loom", "score": 50.0, "scorer": "default-1.0"}),
     ],
     "FINAL": [
-        (1700, "event.transition", "event", {"from": "FROZEN", "to": "FINAL", "by": "the keeper"}),
-        (1701, "verdict.inscribed", "event", {"first": "the_owls / mycelium-mesh", "second": "the_owls / rhizome-rpc", "third": "photosym-duo / photosym-os"}),
-        (1705, "leaderboard.published", "event", None),
+        (240, "event.transition", "event", {"from": "FROZEN", "to": "FINAL", "by": "the keeper"}),
+        (241, "verdict.inscribed", "event", {"first": "the_owls / mycelium-mesh", "second": "the_owls / rhizome-rpc", "third": "photosym-duo / photosym-os"}),
+        (245, "leaderboard.published", "event", None),
     ],
     "ARCHIVED": [
-        (2100, "event.transition", "event", {"from": "FINAL", "to": "ARCHIVED", "by": "the keeper"}),
-        (2110, "export.sealed", "export", {"files": 14, "redaction": "public"}),
-        (2115, "record.closed", "event", {"note": "the ritual is complete"}),
+        (1560, "event.transition", "event", {"from": "FINAL", "to": "ARCHIVED", "by": "the keeper"}),
+        (1570, "export.sealed", "export", {"files": 14, "redaction": "public"}),
+        (1575, "record.closed", "event", {"note": "the ritual is complete"}),
     ],
 }
+
+# Chapters anchored to the window end rather than the start.
+_END_ANCHORED = {"FROZEN", "FINAL", "ARCHIVED"}
 
 # Cumulative history per stage: each stage carries its predecessors' entries.
 _STAGE_HISTORY = {
@@ -143,15 +149,20 @@ _STAGE_HISTORY = {
 }
 
 
-def _anchor_bookkeeping(db, start_at) -> None:
-    """Re-stamp the audit rows the seeding itself produced so they sit inside
-    the stage's own timeline instead of at build wall-clock time (which would
-    crown every stage's log with identical just-now entries — wrong for a
-    snapshot whose window closed a month ago)."""
+def _anchor_bookkeeping(db, start_at, end_at) -> None:
+    """Re-stamp everything the seeding produced — audit rows AND row-level
+    created/modified timestamps — into the stage's own timeline. Without
+    this, a snapshot whose window closed a month ago carries rows "created"
+    at build wall-clock time, and the record contradicts itself."""
     from datetime import timedelta
 
+    from app.models.announcement import Announcement
     from app.models.application import Application
     from app.models.audit_log import AuditLog
+    from app.models.participant import Participant
+    from app.models.project import Project
+    from app.models.score import Score
+    from app.models.submission import Submission
 
     rows = db.query(AuditLog).order_by(AuditLog.created_at).all()
     setup_i = grant_i = 0
@@ -168,20 +179,68 @@ def _anchor_bookkeeping(db, start_at) -> None:
     for application in db.query(Application).filter(Application.decided_at.isnot(None)).all():
         offset = 8 if application.status == "approved" else 4
         application.decided_at = start_at + timedelta(minutes=offset)
+
+    # Petitions arrive the day before the circle opens.
+    for i, application in enumerate(
+        db.query(Application).order_by(Application.email).all()
+    ):
+        application.created_at = start_at - timedelta(days=1, minutes=-11 * i)
+
+    # Seats are reserved in the inscription era.
+    for i, participant in enumerate(
+        db.query(Participant).order_by(Participant.display_name).all()
+    ):
+        participant.created_at = start_at - timedelta(days=1, hours=2, minutes=-9 * i)
+
+    # Proposals land shortly after the gates open; offerings follow.
+    for i, project in enumerate(db.query(Project).order_by(Project.title).all()):
+        stamp = start_at + timedelta(minutes=30 + 13 * i)
+        project.created_at = stamp
+        project.modified_at = stamp
+    for i, submission in enumerate(
+        db.query(Submission).order_by(Submission.title, Submission.version).all()
+    ):
+        stamp = start_at + timedelta(hours=2, minutes=17 * i)
+        submission.created_at = stamp
+        submission.modified_at = stamp
+
+    # Verdicts render after the seal.
+    for i, score in enumerate(db.query(Score).order_by(Score.score_value.desc()).all()):
+        score.scored_at = end_at + timedelta(minutes=20 + i)
+
+    # Dispatches follow the chronicle's arc: setup era, gates, seal, verdict,
+    # archive — matched by title to their publication moment.
+    announcement_stamps = {
+        "The circle is drawn": start_at - timedelta(days=2, minutes=-5),
+        "The gates are open": start_at + timedelta(minutes=5),
+        "Agents are welcome this rite": start_at + timedelta(minutes=35),
+        "The forge is sealed": end_at + timedelta(minutes=10),
+        "The verdict is inscribed": end_at + timedelta(hours=4, minutes=10),
+        "The record is sealed": end_at + timedelta(hours=26, minutes=15),
+    }
+    for announcement in db.query(Announcement).all():
+        stamp = announcement_stamps.get(announcement.title)
+        if stamp is not None:
+            announcement.created_at = stamp
+            announcement.modified_at = stamp
     db.flush()
 
 
-def _seed_chronicle(db, stage: str, anchor=None) -> None:
-    """Write the stage's narrative into the audit log (deterministic offsets
-    from the stage's event start). Flushes; caller commits."""
+def _seed_chronicle(db, stage: str, start_at=None, end_at=None) -> None:
+    """Write the stage's narrative into the audit log. DRAFT/OPEN chapters
+    offset from the window start; FROZEN onward from the window end, so the
+    seal lands when the gates actually close. Flushes; caller commits."""
     import json
     from datetime import timedelta
 
     from app.models.audit_log import AuditLog
 
-    if anchor is None:
-        anchor = settings.event_start.replace(tzinfo=None)
+    if start_at is None:
+        start_at = settings.event_start.replace(tzinfo=None)
+    if end_at is None:
+        end_at = settings.event_end.replace(tzinfo=None)
     for chapter in _STAGE_HISTORY[stage]:
+        anchor = end_at if chapter in _END_ANCHORED else start_at
         for minutes, action, target_type, metadata in _CHRONICLE[chapter]:
             db.add(
                 AuditLog(
@@ -192,6 +251,23 @@ def _seed_chronicle(db, stage: str, anchor=None) -> None:
                 )
             )
     db.flush()
+
+
+def _schema_fingerprint() -> str:
+    """Hash of the current model schema (tables + columns). Snapshots built
+    under an older schema would 500 on new columns — the fingerprint makes
+    boot rebuild them automatically instead."""
+    import app.models  # noqa: F401 — register all models
+
+    parts = []
+    for table in sorted(Base.metadata.tables.values(), key=lambda t: t.name):
+        for column in sorted(table.columns, key=lambda c: c.name):
+            parts.append(f"{table.name}.{column.name}:{column.type}")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+
+def _fingerprint_path(stage: str) -> str:
+    return stage_db_path(stage) + ".schema"
 
 
 def build_stage(stage: str, force: bool = False) -> bool:
@@ -207,8 +283,15 @@ def build_stage(stage: str, force: bool = False) -> bool:
         raise ValueError(f"unknown stage '{stage}'")
 
     path = stage_db_path(stage)
+    fingerprint = _schema_fingerprint()
     if os.path.exists(path) and not force:
-        return False
+        try:
+            with open(_fingerprint_path(stage)) as fh:
+                if fh.read().strip() == fingerprint:
+                    return False
+        except OSError:
+            pass
+        logger.info("Demo stage snapshot outdated — rebuilding", extra={"stage": stage})
 
     started = time.monotonic()
     dispose_stage_engine(stage)  # clear pooled connections; file stays
@@ -223,6 +306,7 @@ def build_stage(stage: str, force: bool = False) -> bool:
     from app.models.event import Event
 
     start_at, end_at = _stage_window(stage)
+    sealed = stage in ("FROZEN", "FINAL", "ARCHIVED")
     with get_sessionmaker(stage)() as db:
         db.add(
             Event(
@@ -232,14 +316,18 @@ def build_stage(stage: str, force: bool = False) -> bool:
                 state=stage,
                 start_at=start_at,
                 end_at=end_at,
+                config_json='{"registration_open": false}' if sealed else None,
             )
         )
         db.flush()
         seed_admin_users(db)
         counts = seed_fixtures(db, PROFILES[stage])
-        _anchor_bookkeeping(db, start_at)
-        _seed_chronicle(db, stage, anchor=start_at)
+        _anchor_bookkeeping(db, start_at, end_at)
+        _seed_chronicle(db, stage, start_at=start_at, end_at=end_at)
         db.commit()
+
+    with open(_fingerprint_path(stage), "w") as fh:
+        fh.write(fingerprint)
 
     logger.info(
         "Demo stage snapshot built",

@@ -396,3 +396,39 @@ async def test_invalid_header_falls_to_primary(demo_client):
         "/api/event", headers={"x-demo-stage": "banana"}
     )
     assert resp.json()["state"] == _primary_state()
+
+
+def test_outdated_snapshot_rebuilds_on_fingerprint_mismatch(demo_mode):
+    from app.services.demo_stages import _fingerprint_path, build_stage
+
+    with open(_fingerprint_path("OPEN"), "w") as fh:
+        fh.write("stale-schema-marker")
+    assert build_stage("OPEN", force=False) is True  # rebuilt
+    assert build_stage("OPEN", force=False) is False  # now current
+
+
+def test_frozen_seal_lands_at_the_window_end(demo_mode):
+    from datetime import timedelta
+
+    from app.database import get_sessionmaker
+    from app.models.audit_log import AuditLog
+    from app.models.event import Event
+
+    with get_sessionmaker("FROZEN")() as db:
+        ev = db.query(Event).one()
+        newest = db.query(AuditLog).order_by(AuditLog.created_at.desc()).first()
+        # Scoring follows the seal, within the hour after the gates close.
+        assert ev.end_at <= newest.created_at <= ev.end_at + timedelta(hours=1)
+        assert newest.action == "score.rendered"
+
+
+def test_archived_announcements_progress_by_date(demo_mode):
+    from app.database import get_sessionmaker
+    from app.models.announcement import Announcement
+
+    with get_sessionmaker("ARCHIVED")() as db:
+        rows = (
+            db.query(Announcement).order_by(Announcement.created_at.desc()).all()
+        )
+        assert rows[0].title == "The record is sealed"
+        assert rows[-1].title == "The circle is drawn"
